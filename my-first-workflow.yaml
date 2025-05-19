@@ -1,0 +1,15 @@
+name: Greetings  # Name of your workflow
+
+on:
+  push:  # Trigger the workflow on every push to the repository
+  # You can also use:
+  #  pull_request: # to trigger on pull requests
+  #  schedule:
+  #    - cron: "0 0 * * *" # Runs daily at midnight UTC
+
+jobs:
+  say_hello:  # Define a job named "say_hello"
+    runs-on: ubuntu-latest  # Specify the operating system for the virtual machine
+    steps:
+      - name: Print a greeting  # Define a step within the job
+        run: echo "Hello, GitHub Actions!"  # The command to execute
