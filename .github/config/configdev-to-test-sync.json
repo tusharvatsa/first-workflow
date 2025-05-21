@@ -1,0 +1,14 @@
+{
+  "security_systems_to_sync": [
+    "dev-sec-sys-1",
+    "dev-sec-sys-2"
+  ],
+  "connections_to_sync": [
+    "dev-conn-alpha",
+    "dev-conn-beta"
+  ],
+  "endpoints_to_sync": [
+    "dev-api-endpoint-v1",
+    "dev-web-endpoint-v2"
+  ]
+}

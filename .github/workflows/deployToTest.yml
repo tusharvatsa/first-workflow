@@ -1,0 +1,169 @@
+name: Deploy Dev to Test - Iterative Config Fetch
+
+on:
+  push:
+    branches:
+      - dev # Trigger when changes are pushed to the 'dev' branch
+  workflow_dispatch: # Allows manual triggering from the GitHub UI
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+
+env:
+  API_BASE_URL: 'https://emeaps-poc.saviyntcloud.com' # Your actual API base URL
+  CONFIG_FILE_PATH: 'config/configdev-to-test-sync.json' # Path to your configuration list file
+
+jobs:
+  prepare_test_deployment:
+    runs-on: ubuntu-latest
+    environment:
+      name: dev_env # This links to a GitHub Environment for secrets/protection rules
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install JQ (for JSON parsing)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Fetch Access Token
+        id: get_token
+        run: |
+          TOKEN_RESPONSE=$(curl -s -X POST \
+            "${{ env.API_BASE_URL }}/ECMv6/api/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{
+                  "username": "${{ secrets.API_USERNAME }}",
+                  "password": "${{ secrets.API_PASSWORD }}"
+                }')
+          
+          if [ "$(echo "$TOKEN_RESPONSE" | jq -r '.accessToken')" == "null" ]; then
+            echo "Error: Failed to fetch access token."
+            echo "$TOKEN_RESPONSE"
+            exit 1
+          fi
+
+          ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.accessToken')
+          echo "::add-mask::$ACCESS_TOKEN"
+          echo "accessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+        env:
+          API_USERNAME: ${{ secrets.API_USERNAME }}
+          API_PASSWORD: ${{ secrets.API_PASSWORD }}
+
+      - name: Read Configuration List File
+        id: read_config_list
+        run: |
+          if [ ! -f "${{ env.CONFIG_FILE_PATH }}" ]; then
+            echo "Error: Configuration file not found at ${{ env.CONFIG_FILE_PATH }}"
+            exit 1
+          fi
+          
+          SECURITY_SYSTEMS=$(jq -c '.security_systems_to_sync[]' "${{ env.CONFIG_FILE_PATH }}")
+          CONNECTIONS=$(jq -c '.connections_to_sync[]' "${{ env.CONFIG_FILE_PATH }}")
+          ENDPOINTS=$(jq -c '.endpoints_to_sync[]' "${{ env.CONFIG_FILE_PATH }}")
+
+          echo "security_systems_to_sync_json=[${SECURITY_SYSTEMS}]" >> "$GITHUB_OUTPUT"
+          echo "connections_to_sync_json=[${CONNECTIONS}]" >> "$GITHUB_OUTPUT"
+          echo "endpoints_to_sync_json=[${ENDPOINTS}]" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch Individual Dev Configurations
+        id: get_individual_dev_configs
+        run: |
+          ACCESS_TOKEN="${{ steps.get_token.outputs.accessToken }}"
+          AUTH_HEADER="Authorization: Bearer $ACCESS_TOKEN"
+          CONTENT_TYPE="Content-Type: application/json"
+
+          ALL_DEV_SECURITY_SYSTEMS="[]"
+          ALL_DEV_CONNECTIONS="[]"
+          ALL_DEV_ENDPOINTS="[]"
+
+          # Fetch Security Systems (assuming GET with query param remains for this)
+          echo "Fetching Dev Security Systems..."
+          IFS=$'\n' # Set Internal Field Separator to newline for iterating over jq output
+          for SYS_ID in $(echo "${{ steps.read_config_list.outputs.security_systems_to_sync_json }}" | jq -r '.[]'); do
+            echo "  Fetching security system: $SYS_ID"
+            SYS_DETAILS=$(curl -s -X GET \
+              "${{ env.API_BASE_URL }}/ECM/api/v5/getSecuritySystems?systemname=$SYS_ID" \
+              -H "$AUTH_HEADER" \
+              -H "$CONTENT_TYPE")
+            
+            # Basic validation: Check if response is empty or contains an 'error' field
+            if [ -z "$SYS_DETAILS" ] || echo "$SYS_DETAILS" | jq -e 'has("error")' >/dev/null; then
+                echo "Warning: Could not fetch details for security system '$SYS_ID'. Response: $SYS_DETAILS"
+                exit 1 # Fail if a critical config is not found
+            else
+                ALL_DEV_SECURITY_SYSTEMS=$(echo "$ALL_DEV_SECURITY_SYSTEMS" | jq --argjson new_sys "$SYS_DETAILS" '. += [$new_sys]')
+            fi
+          done
+
+          # Fetch Connections (POST with JSON body)
+          echo "Fetching Dev Connections..."
+          for CONN_ID in $(echo "${{ steps.read_config_list.outputs.connections_to_sync_json }}" | jq -r '.[]'); do
+            echo "  Fetching connection: $CONN_ID"
+            # Construct JSON payload for the POST request
+            POST_DATA="{\"connectionname\": \"$CONN_ID\"}"
+            
+            CONN_DETAILS=$(curl -s -X POST \
+              "${{ env.API_BASE_URL }}/ECM/api/v5/getConnectionDetails" \
+              -H "$AUTH_HEADER" \
+              -H "$CONTENT_TYPE" \
+              -d "$POST_DATA") # Use -d for JSON body
+            
+            if [ -z "$CONN_DETAILS" ] || echo "$CONN_DETAILS" | jq -e 'has("error")' >/dev/null; then
+                echo "Warning: Could not fetch details for connection '$CONN_ID'. Response: $CONN_DETAILS"
+                exit 1
+            else
+                ALL_DEV_CONNECTIONS=$(echo "$ALL_DEV_CONNECTIONS" | jq --argjson new_conn "$CONN_DETAILS" '. += [$new_conn]')
+            fi
+          done
+
+          # Fetch Endpoints (POST with JSON body)
+          echo "Fetching Dev Endpoints..."
+          for ENDP_ID in $(echo "${{ steps.read_config_list.outputs.endpoints_to_sync_json }}" | jq -r '.[]'); do
+            echo "  Fetching endpoint: $ENDP_ID"
+            # Construct JSON payload for the POST request
+            POST_DATA="{ \"filterCriteria1\": { \"endpointname\": \"$ENDP_ID\" } }"
+            
+            ENDP_DETAILS=$(curl -s -X POST \
+              "${{ env.API_BASE_URL }}/ECM/api/v5/getEndpoints" \
+              -H "$AUTH_HEADER" \
+              -H "$CONTENT_TYPE" \
+              -d "$POST_DATA") # Use -d for JSON body
+            
+            if [ -z "$ENDP_DETAILS" ] || echo "$ENDP_DETAILS" | jq -e 'has("error")' >/dev/null; then
+                echo "Warning: Could not fetch details for endpoint '$ENDP_ID'. Response: $ENDP_DETAILS"
+                exit 1
+            else
+                ALL_DEV_ENDPOINTS=$(echo "$ALL_DEV_ENDPOINTS" | jq --argjson new_endp "$ENDP_DETAILS" '. += [$new_endp]')
+            fi
+          done
+          
+          # Restore IFS
+          unset IFS
+
+          echo "all_dev_security_systems=$ALL_DEV_SECURITY_SYSTEMS" >> "$GITHUB_OUTPUT"
+          echo "all_dev_connections=$ALL_DEV_CONNECTIONS" >> "$GITHUB_OUTPUT"
+          echo "all_dev_endpoints=$ALL_DEV_ENDPOINTS" >> "$GITHUB_OUTPUT"
+
+      - name: Save Fetched Configurations to Files
+        run: |
+          mkdir -p fetched_configs # Create a directory to store the files
+          
+          echo "${{ steps.get_individual_dev_configs.outputs.all_dev_security_systems }}" > fetched_configs/dev_security_systems.json
+          echo "Saved dev_security_systems.json"
+          
+          echo "${{ steps.get_individual_dev_configs.outputs.all_dev_connections }}" > fetched_configs/dev_connections.json
+          echo "Saved dev_connections.json"
+          
+          echo "${{ steps.get_individual_dev_configs.outputs.all_dev_endpoints }}" > fetched_configs/dev_endpoints.json
+          echo "Saved dev_endpoints.json"
+
+      - name: Upload Fetched Configurations as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-configurations
+          path: fetched_configs/ # Upload the entire directory
