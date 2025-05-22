@@ -189,14 +189,17 @@ jobs:
             echo "Error: Valid attributes configuration file not found at ${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}"
             exit 1
           fi
-          # Read the entire config-valid-attributes.json and escape it for output
-          VALID_ATTRIBUTES_CONFIG=$(jq -sRr @json "${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}")
-          echo "valid_attributes_config=$VALID_ATTRIBUTES_CONFIG" >> "$GITHUB_OUTPUT"
+          # Read the entire config-valid-attributes.json and output it using a custom delimiter
+          # This handles multi-line JSON correctly without needing complex escaping.
+          echo "valid_attributes_config<<EOF_VALID_ATTRIBUTES_CONFIG" >> "$GITHUB_OUTPUT"
+          cat "${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}" >> "$GITHUB_OUTPUT"
+          echo "EOF_VALID_ATTRIBUTES_CONFIG" >> "$GITHUB_OUTPUT"
 
       - name: Process and Save Configurations
         run: |
-          # Unescape the JSON string before using it with jq
-          VALID_ATTRIBUTES_CONFIG=$(echo '${{ steps.read_valid_attributes.outputs.valid_attributes_config }}' | jq -r '.')
+          # The output from the previous step is now the raw JSON content,
+          # so no unescaping with jq is needed here.
+          VALID_ATTRIBUTES_CONFIG="${{ steps.read_valid_attributes.outputs.valid_attributes_config }}"
           PROCESSED_DIR="${{ env.PROCESSED_OUTPUT_DIR }}"
           RAW_DIR="${{ env.RAW_OUTPUT_DIR }}"
 
