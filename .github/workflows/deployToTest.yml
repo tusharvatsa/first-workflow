@@ -189,17 +189,18 @@ jobs:
             echo "Error: Valid attributes configuration file not found at ${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}"
             exit 1
           fi
-          # Read the entire config-valid-attributes.json and output it using a custom delimiter
-          # This handles multi-line JSON correctly without needing complex escaping.
+          # Read the entire config-valid-attributes.json and output it using a custom delimiter.
+          # Using printf to ensure no trailing spaces after the delimiter.
           echo "valid_attributes_config<<EOF_VALID_ATTRIBUTES_CONFIG" >> "$GITHUB_OUTPUT"
           cat "${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}" >> "$GITHUB_OUTPUT"
-          echo "EOF_VALID_ATTRIBUTES_CONFIG" >> "$GITHUB_OUTPUT" # Ensure no trailing space here
+          printf "%s\n" "EOF_VALID_ATTRIBUTES_CONFIG" >> "$GITHUB_OUTPUT" # Ensures no trailing space
 
       - name: Process and Save Configurations
         run: |
-          # The output from the previous step is now the raw JSON content,
-          # so no unescaping with jq is needed here.
-          VALID_ATTRIBUTES_CONFIG="${{ steps.read_valid_attributes.outputs.valid_attributes_config }}"
+          # The output from the previous step is now the raw JSON content.
+          # We still need to parse it with jq to ensure it's treated as JSON
+          # within the bash function, as it's a multi-line string.
+          VALID_ATTRIBUTES_CONFIG_RAW="${{ steps.read_valid_attributes.outputs.valid_attributes_config }}"
           PROCESSED_DIR="${{ env.PROCESSED_OUTPUT_DIR }}"
           RAW_DIR="${{ env.RAW_OUTPUT_DIR }}"
 
@@ -213,8 +214,8 @@ jobs:
             local type=$1 # e.g., "connection", "securitySystem", "endpoint"
             local file_path=$2
             local id=$(basename "$file_path" .json)
-            # Use a here-string or pipe to pass the VALID_ATTRIBUTES_CONFIG to jq
-            local config_json=$(echo "$VALID_ATTRIBUTES_CONFIG" | jq '.')
+            # Parse the raw config JSON string into a jq-readable format
+            local config_json=$(echo "$VALID_ATTRIBUTES_CONFIG_RAW" | jq '.')
 
             echo "  Processing $type: $id"
             local processed_json=$(cat "$file_path")
