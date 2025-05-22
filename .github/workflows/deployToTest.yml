@@ -65,6 +65,7 @@ jobs:
             exit 1
           fi
           
+          echo "config file ::${{ env.CONFIG_FILE_PATH }} read successfully"
           # Read all arrays into distinct variables for iteration
           # Using -r to get raw strings without quotes, and -c to ensure compact output for storing in variables
           SECURITY_SYSTEMS=$(jq -r '.security_systems_to_sync[]' "${{ env.CONFIG_FILE_PATH }}")
@@ -72,8 +73,11 @@ jobs:
           ENDPOINTS=$(jq -r '.endpoints_to_sync[]' "${{ env.CONFIG_FILE_PATH }}")
 
           # Output these for potential debugging or future use, though they are mostly consumed directly in the next step.
+          echo "security_systems_to_sync_list=$SECURITY_SYSTEMS"
           echo "security_systems_to_sync_list=$SECURITY_SYSTEMS" >> "$GITHUB_OUTPUT"
+          echo "connections_to_sync_list=$CONNECTIONS"
           echo "connections_to_sync_list=$CONNECTIONS" >> "$GITHUB_OUTPUT"
+          echo "endpoints_to_sync_list=$ENDPOINTS"
           echo "endpoints_to_sync_list=$ENDPOINTS" >> "$GITHUB_OUTPUT"
 
       - name: Fetch and Save Individual Dev Configurations
