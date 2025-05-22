@@ -193,7 +193,7 @@ jobs:
           # This handles multi-line JSON correctly without needing complex escaping.
           echo "valid_attributes_config<<EOF_VALID_ATTRIBUTES_CONFIG" >> "$GITHUB_OUTPUT"
           cat "${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}" >> "$GITHUB_OUTPUT"
-          echo "EOF_VALID_ATTRIBUTES_CONFIG" >> "$GITHUB_OUTPUT"
+          echo "EOF_VALID_ATTRIBUTES_CONFIG" >> "$GITHUB_OUTPUT" # Ensure no trailing space here
 
       - name: Process and Save Configurations
         run: |
@@ -213,7 +213,8 @@ jobs:
             local type=$1 # e.g., "connection", "securitySystem", "endpoint"
             local file_path=$2
             local id=$(basename "$file_path" .json)
-            local config_json="$VALID_ATTRIBUTES_CONFIG" # This is now the unescaped JSON string
+            # Use a here-string or pipe to pass the VALID_ATTRIBUTES_CONFIG to jq
+            local config_json=$(echo "$VALID_ATTRIBUTES_CONFIG" | jq '.')
 
             echo "  Processing $type: $id"
             local processed_json=$(cat "$file_path")
