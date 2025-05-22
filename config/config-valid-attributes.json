@@ -9,12 +9,13 @@
         "createdon",
         "createdby",
         "errorcode",
-        "status"
+        "status",
+		"connectionname"
       ],
       "override": {
-        "connectionname": "zolo-ad-prod",
+        "connectionName": "zolo-ad-prod",
 		"description":"zolo-ad-prod",
-		"URL":"https://zolo-ad-prod-url",
+		"URL":"ldaps://zolo-ad-prod-url",
         "USERNAME": "zolo-ad-prod-username",
         "PASSWORD": "zolo-ad-prod-password"
       }
