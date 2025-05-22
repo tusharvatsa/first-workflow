@@ -136,7 +136,7 @@ jobs:
                 echo "$CONN_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/connections/${CONN_ID}.json"
                 echo "Saved ${{ env.RAW_OUTPUT_DIR }}/connections/${CONN_ID}.json"
             else
-                echo "Warning: Could not fetch valid details for connection '$CONN_ID'. Response: $CONN_DETAILS"
+                echo "Warning: Could not fetch valid details for connection '$CONN_ID'. Response: "$CONN_DETAILS""
             fi
           done
 
@@ -156,7 +156,7 @@ jobs:
                 echo "$ENDP_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
                 echo "Saved ${{ env.RAW_OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
             else
-                echo "Warning: Could not fetch valid details for endpoint '$ENDP_ID'. Response: $ENDP_DETAILS"
+                echo "Warning: Could not fetch valid details for endpoint '$ENDP_ID'. Response: "$ENDP_DETAILS""
             fi
           done
 
@@ -213,7 +213,8 @@ jobs:
           RAW_DIR="${{ env.RAW_OUTPUT_DIR }}"
 
           mkdir -p "$PROCESSED_DIR"
-          mkdir -p "$PROCESSED_DIR/security_systems"
+          # Corrected directory name for security systems to match the output from process_single_file
+          mkdir -p "$PROCESSED_DIR/securitySystems"
           mkdir -p "$PROCESSED_DIR/connections"
           mkdir -p "$PROCESSED_DIR/endpoints"
 
@@ -254,6 +255,7 @@ jobs:
               echo "    Applied overrides for $type $id: $override_map"
             fi
 
+            # The output path now correctly uses "${type}s" which for "securitySystem" becomes "securitySystems"
             echo "$processed_json" > "$PROCESSED_DIR/${type}s/${id}.json"
             echo "    Saved processed config to $PROCESSED_DIR/${type}s/${id}.json"
             return 0 # Indicate success
