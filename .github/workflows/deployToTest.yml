@@ -16,7 +16,7 @@ on:
 
 env:
   API_BASE_URL: 'https://emeaps-poc.saviyntcloud.com' # Your actual API base URL
-  CONFIG_FILE_PATH: 'config/configdev-to-test-sync.json' # Path to your configuration list file
+  CONFIG_FILE_PATH: 'config/config-dev-to-test-sync.json' # Path to your configuration list file
   VALID_ATTRIBUTES_CONFIG_PATH: 'config/config-valid-attributes.json' # Path to your valid attributes file
   RAW_OUTPUT_DIR: 'fetched_configs_raw' # Base directory to save all fetched JSON files
   PROCESSED_OUTPUT_DIR: 'fetched_configs_processed' # Directory for processed JSON files

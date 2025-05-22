@@ -4,9 +4,11 @@
 	"zolo-ad-hrmaster"
   ],
   "connections_to_sync": [
-    "zolo-ad"
+    "zolo-ad",
+	"zolo-ad-hrmaster"
   ],
   "endpoints_to_sync": [
-    "zolo-ad"
+    "zolo-ad",
+	"zolo-ad-hrmaster"
   ]
 }
