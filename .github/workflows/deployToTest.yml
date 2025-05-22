@@ -189,13 +189,14 @@ jobs:
             echo "Error: Valid attributes configuration file not found at ${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}"
             exit 1
           fi
-          # Read the entire config-valid-attributes.json into a variable for jq processing
-          VALID_ATTRIBUTES_CONFIG=$(cat "${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}")
+          # Read the entire config-valid-attributes.json and escape it for output
+          VALID_ATTRIBUTES_CONFIG=$(jq -sRr @json "${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}")
           echo "valid_attributes_config=$VALID_ATTRIBUTES_CONFIG" >> "$GITHUB_OUTPUT"
 
       - name: Process and Save Configurations
         run: |
-          VALID_ATTRIBUTES_CONFIG='${{ steps.read_valid_attributes.outputs.valid_attributes_config }}'
+          # Unescape the JSON string before using it with jq
+          VALID_ATTRIBUTES_CONFIG=$(echo '${{ steps.read_valid_attributes.outputs.valid_attributes_config }}' | jq -r '.')
           PROCESSED_DIR="${{ env.PROCESSED_OUTPUT_DIR }}"
           RAW_DIR="${{ env.RAW_OUTPUT_DIR }}"
 
@@ -209,7 +210,7 @@ jobs:
             local type=$1 # e.g., "connection", "securitySystem", "endpoint"
             local file_path=$2
             local id=$(basename "$file_path" .json)
-            local config_json="$VALID_ATTRIBUTES_CONFIG"
+            local config_json="$VALID_ATTRIBUTES_CONFIG" # This is now the unescaped JSON string
 
             echo "  Processing $type: $id"
             local processed_json=$(cat "$file_path")
