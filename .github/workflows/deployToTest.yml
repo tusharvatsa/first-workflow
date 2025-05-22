@@ -238,6 +238,13 @@ jobs:
 
             local processed_json=$(cat "$file_path")
 
+            # Apply specific transformation for 'connection' type to flatten 'connectionattributes'
+            if [ "$type" == "connection" ]; then
+                echo "    Flattening 'connectionattributes' for connection: $id"
+                # Merge .connectionattributes into the root and then delete .connectionattributes
+                processed_json=$(echo "$processed_json" | jq '. + .connectionattributes | del(.connectionattributes)')
+            fi
+
             # Apply exclude rules
             local exclude_keys=$(echo "$config_json" | jq -r ".${type}[\"$id\"].exclude[]? // empty")
             if [ -n "$exclude_keys" ]; then
