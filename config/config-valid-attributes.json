@@ -2,6 +2,8 @@
   "connection": {
     "zolo-ad": {
       "exclude": [
+	    "msg",
+		"LAST_IMPORT_TIME",
         "updatedby",
         "connectionkey",
         "createdon",
@@ -11,7 +13,9 @@
       ],
       "override": {
         "connectionname": "zolo-ad-prod",
-        "username": "zolo-ad-prod-username",
+		"description":"zolo-ad-prod",
+		"URL":"https://zolo-ad-prod-url"
+        "USERNAME": "zolo-ad-prod-username",
         "PASSWORD": "zolo-ad-prod-password"
       }
     },
