@@ -109,12 +109,14 @@ jobs:
               -H "$AUTH_HEADER" \
               -H "$CONTENT_TYPE")
             
-            if [ -z "$SYS_DETAILS" ] || echo "$SYS_DETAILS" | jq -e 'has("error")' >/dev/null; then
-                echo "Error: Could not fetch details for security system '$SYS_ID'. Response: $SYS_DETAILS"
-                exit 1
-            else
+            # Check if API response is valid JSON and not empty
+            if echo "$SYS_DETAILS" | jq -e . >/dev/null && [ "$(echo "$SYS_DETAILS" | jq 'length')" -gt 0 ]; then
                 echo "$SYS_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/security_systems/${SYS_ID}.json"
                 echo "Saved ${{ env.RAW_OUTPUT_DIR }}/security_systems/${SYS_ID}.json"
+            else
+                echo "Warning: Could not fetch valid details for security system '$SYS_ID'. Response: $SYS_DETAILS"
+                # Do NOT exit 1 here, allow other fetches to continue.
+                # If a file is not found, it will be skipped in the processing step.
             fi
           done
 
@@ -130,12 +132,11 @@ jobs:
               -H "$CONTENT_TYPE" \
               -d "$POST_DATA")
             
-            if [ -z "$CONN_DETAILS" ] || echo "$CONN_DETAILS" | jq -e 'has("error")' >/dev/null; then
-                echo "Error: Could not fetch details for connection '$CONN_ID'. Response: $CONN_DETAILS"
-                exit 1
-            else
+            if echo "$CONN_DETAILS" | jq -e . >/dev/null && [ "$(echo "$CONN_DETAILS" | jq 'length')" -gt 0 ]; then
                 echo "$CONN_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/connections/${CONN_ID}.json"
                 echo "Saved ${{ env.RAW_OUTPUT_DIR }}/connections/${CONN_ID}.json"
+            else
+                echo "Warning: Could not fetch valid details for connection '$CONN_ID'. Response: $CONN_DETAILS"
             fi
           done
 
@@ -151,14 +152,18 @@ jobs:
               -H "$CONTENT_TYPE" \
               -d "$POST_DATA")
             
-            if [ -z "$ENDP_DETAILS" ] || echo "$ENDP_DETAILS" | jq -e 'has("error")' >/dev/null; then
-                echo "Error: Could not fetch details for endpoint '$ENDP_ID'. Response: $ENDP_DETAILS"
-                exit 1
-            else
+            if echo "$ENDP_DETAILS" | jq -e . >/dev/null && [ "$(echo "$ENDP_DETAILS" | jq 'length')" -gt 0 ]; then
                 echo "$ENDP_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
                 echo "Saved ${{ env.RAW_OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
+            else
+                echo "Warning: Could not fetch valid details for endpoint '$ENDP_ID'. Response: $ENDP_DETAILS"
             fi
           done
+
+      - name: List Raw Configurations (before upload)
+        run: |
+          echo "Contents of ${{ env.RAW_OUTPUT_DIR }} before artifact upload:"
+          ls -R ${{ env.RAW_OUTPUT_DIR }} || echo "Directory is empty or does not exist."
 
       - name: Upload Fetched Raw Configurations as Artifact
         uses: actions/upload-artifact@v4
@@ -181,6 +186,11 @@ jobs:
         with:
           name: dev-configurations-raw
           path: ${{ env.RAW_OUTPUT_DIR }} # Download to the same path as it was uploaded from
+
+      - name: List Raw Configurations (after download)
+        run: |
+          echo "Contents of ${{ env.RAW_OUTPUT_DIR }} after artifact download:"
+          ls -R ${{ env.RAW_OUTPUT_DIR }} || echo "Directory is empty or does not exist."
 
       - name: Read Valid Attributes Configuration File
         id: read_valid_attributes
@@ -207,15 +217,24 @@ jobs:
           mkdir -p "$PROCESSED_DIR/connections"
           mkdir -p "$PROCESSED_DIR/endpoints"
 
-          # Function to process a single JSON file
-          process_file() {
-            local type=$1 # e.g., "connection", "securitySystem", "endpoint"
-            local file_path=$2
-            local id=$(basename "$file_path" .json)
-            # Read the config_json directly from the temporary file
-            local config_json=$(cat "$VALID_ATTRIBUTES_CONFIG_PATH" | jq '.')
+          # Read the config_json once from the temporary file
+          local_valid_attributes_config=$(cat "$VALID_ATTRIBUTES_CONFIG_PATH" | jq '.')
 
-            echo "  Processing $type: $id"
+          # Function to process a single JSON file
+          process_single_file() {
+            local type=$1 # e.g., "connection", "securitySystem", "endpoint"
+            local file_path=$2 # Full path to the raw file
+            local id=$(basename "$file_path" .json)
+            local config_json="$local_valid_attributes_config" # Use the pre-read config
+
+            echo "  Processing $type: $id (File: $file_path)"
+            
+            # Check if the file exists before attempting to read it
+            if [ ! -f "$file_path" ]; then
+                echo "Error: File not found at '$file_path'. Skipping processing for $id."
+                return 1 # Indicate failure for this specific file
+            fi
+
             local processed_json=$(cat "$file_path")
 
             # Apply exclude rules
@@ -237,21 +256,46 @@ jobs:
 
             echo "$processed_json" > "$PROCESSED_DIR/${type}s/${id}.json"
             echo "    Saved processed config to $PROCESSED_DIR/${type}s/${id}.json"
+            return 0 # Indicate success
           }
-
-          export -f process_file # Export function for find -exec
 
           # Process Security Systems
           echo "Processing Security Systems..."
-          find "$RAW_DIR/security_systems" -name "*.json" -exec bash -c 'process_file "securitySystem" "$0"' {} \;
+          if [ -d "$RAW_DIR/security_systems" ]; then
+            for file in "$RAW_DIR/security_systems"/*.json; do
+              # The glob pattern will return the pattern itself if no files match.
+              # Check if it's a real file before calling the function.
+              if [ -f "$file" ]; then
+                process_single_file "securitySystem" "$file"
+              fi
+            done
+          else
+            echo "Warning: Directory '$RAW_DIR/security_systems' does not exist."
+          fi
 
           # Process Connections
           echo "Processing Connections..."
-          find "$RAW_DIR/connections" -name "*.json" -exec bash -c 'process_file "connection" "$0"' {} \;
+          if [ -d "$RAW_DIR/connections" ]; then
+            for file in "$RAW_DIR/connections"/*.json; do
+              if [ -f "$file" ]; then
+                process_single_file "connection" "$file"
+              fi
+            done
+          else
+            echo "Warning: Directory '$RAW_DIR/connections' does not exist."
+          fi
 
           # Process Endpoints
           echo "Processing Endpoints..."
-          find "$RAW_DIR/endpoints" -name "*.json" -exec bash -c 'process_file "endpoint" "$0"' {} \;
+          if [ -d "$RAW_DIR/endpoints" ]; then
+            for file in "$RAW_DIR/endpoints"/*.json; do
+              if [ -f "$file" ]; then
+                process_single_file "endpoint" "$file"
+              fi
+            done
+          else
+            echo "Warning: Directory '$RAW_DIR/endpoints' does not exist."
+          fi
 
       - name: Upload Processed Configurations as Artifact
         uses: actions/upload-artifact@v4
