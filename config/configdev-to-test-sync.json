@@ -1,6 +1,7 @@
 {
   "security_systems_to_sync": [
-    "zolo-ad"
+    "zolo-ad",
+	"zolo-ad-hrmaster"
   ],
   "connections_to_sync": [
     "zolo-ad"

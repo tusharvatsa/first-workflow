@@ -1,9 +1,9 @@
-name: Deploy Dev to Test - Fetch Raw Configs
+name: Deploy Dev to Test - Fetch & Process Configs
 
 on:
   push:
     branches:
-      - dev # Trigger when changes are pushed to the 'dev' branch
+      - main # Trigger when changes are pushed to the 'main' branch
   workflow_dispatch: # Allows manual triggering from the GitHub UI
     inputs:
       environment:
@@ -17,7 +17,9 @@ on:
 env:
   API_BASE_URL: 'https://emeaps-poc.saviyntcloud.com' # Your actual API base URL
   CONFIG_FILE_PATH: 'config/configdev-to-test-sync.json' # Path to your configuration list file
-  OUTPUT_DIR: 'fetched_configs' # Base directory to save all fetched JSON files
+  VALID_ATTRIBUTES_CONFIG_PATH: 'config/config-valid-attributes.json' # Path to your valid attributes file
+  RAW_OUTPUT_DIR: 'fetched_configs_raw' # Base directory to save all fetched JSON files
+  PROCESSED_OUTPUT_DIR: 'fetched_configs_processed' # Directory for processed JSON files
 
 jobs:
   prepare_test_deployment:
@@ -49,7 +51,7 @@ jobs:
           fi
 
           ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.accessToken')
-          echo "AccessToken::$ACCESS_TOKEN"
+          echo "AccessToken::$ACCESS_TOKEN" # For logging, not for direct use in subsequent steps
           echo "accessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
         env:
           API_USERNAME: ${{ secrets.API_USERNAME }}
@@ -69,8 +71,7 @@ jobs:
           CONNECTIONS=$(jq -r '.connections_to_sync[]' "${{ env.CONFIG_FILE_PATH }}")
           ENDPOINTS=$(jq -r '.endpoints_to_sync[]' "${{ env.CONFIG_FILE_PATH }}")
 
-          # We still output these for potential debugging or future use, 
-          # though they are mostly consumed directly in the next step.
+          # Output these for potential debugging or future use, though they are mostly consumed directly in the next step.
           echo "security_systems_to_sync_list=$SECURITY_SYSTEMS" >> "$GITHUB_OUTPUT"
           echo "connections_to_sync_list=$CONNECTIONS" >> "$GITHUB_OUTPUT"
           echo "endpoints_to_sync_list=$ENDPOINTS" >> "$GITHUB_OUTPUT"
@@ -83,10 +84,10 @@ jobs:
           CONTENT_TYPE="Content-Type: application/json"
 
           # Create base output directory
-          mkdir -p ${{ env.OUTPUT_DIR }}
-          mkdir -p ${{ env.OUTPUT_DIR }}/security_systems
-          mkdir -p ${{ env.OUTPUT_DIR }}/connections
-          mkdir -p ${{ env.OUTPUT_DIR }}/endpoints
+          mkdir -p ${{ env.RAW_OUTPUT_DIR }}
+          mkdir -p ${{ env.RAW_OUTPUT_DIR }}/security_systems
+          mkdir -p ${{ env.RAW_OUTPUT_DIR }}/connections
+          mkdir -p ${{ env.RAW_OUTPUT_DIR }}/endpoints
 
           # Fetch Security Systems
           echo "Fetching and saving Dev Security Systems..."
@@ -100,10 +101,12 @@ jobs:
             
             if [ -z "$SYS_DETAILS" ] || echo "$SYS_DETAILS" | jq -e 'has("error")' >/dev/null; then
                 echo "Warning: Could not fetch details for security system '$SYS_ID'. Response: $SYS_DETAILS"
-                exit 1 # Fail if a critical config is not found
+                # Changed from exit 1 to continue to allow other fetches to proceed,
+                # change to continue or exit 1 (based on what you want to do if individual config can not be fetched
+                exit 1
             else
-                echo "$SYS_DETAILS" > "${{ env.OUTPUT_DIR }}/security_systems/${SYS_ID}.json"
-                echo "Saved ${{ env.OUTPUT_DIR }}/security_systems/${SYS_ID}.json"
+                echo "$SYS_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/security_systems/${SYS_ID}.json"
+                echo "Saved ${{ env.RAW_OUTPUT_DIR }}/security_systems/${SYS_ID}.json"
             fi
           done
 
@@ -123,8 +126,8 @@ jobs:
                 echo "Warning: Could not fetch details for connection '$CONN_ID'. Response: $CONN_DETAILS"
                 exit 1
             else
-                echo "$CONN_DETAILS" > "${{ env.OUTPUT_DIR }}/connections/${CONN_ID}.json"
-                echo "Saved ${{ env.OUTPUT_DIR }}/connections/${CONN_ID}.json"
+                echo "$CONN_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/connections/${CONN_ID}.json"
+                echo "Saved ${{ env.RAW_OUTPUT_DIR }}/connections/${CONN_ID}.json"
             fi
           done
 
@@ -144,17 +147,104 @@ jobs:
                 echo "Warning: Could not fetch details for endpoint '$ENDP_ID'. Response: $ENDP_DETAILS"
                 exit 1
             else
-                echo "$ENDP_DETAILS" > "${{ env.OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
-                echo "Saved ${{ env.OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
+                echo "$ENDP_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
+                echo "Saved ${{ env.RAW_OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
             fi
           done
           
           unset IFS # Restore IFS
 
-          # No need to output aggregated JSON variables as they are not used downstream for file saving
-
-      - name: Upload Fetched Configurations as Artifact
+      - name: Upload Fetched Raw Configurations as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: dev-configurations-raw
-          path: ${{ env.OUTPUT_DIR }}/ # Upload the entire base directory
+          path: ${{ env.RAW_OUTPUT_DIR }}/ # Upload the entire base directory
+
+  process_configurations:
+    runs-on: ubuntu-latest
+    needs: prepare_test_deployment # This job depends on the successful completion of the previous job
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install JQ (for JSON parsing)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Download Raw Configurations Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dev-configurations-raw
+          path: ${{ env.RAW_OUTPUT_DIR }} # Download to the same path as it was uploaded from
+
+      - name: Read Valid Attributes Configuration File
+        id: read_valid_attributes
+        run: |
+          if [ ! -f "${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}" ]; then
+            echo "Error: Valid attributes configuration file not found at ${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}"
+            exit 1
+          fi
+          # Read the entire config-valid-attributes.json into a variable for jq processing
+          VALID_ATTRIBUTES_CONFIG=$(cat "${{ env.VALID_ATTRIBUTES_CONFIG_PATH }}")
+          echo "valid_attributes_config=$VALID_ATTRIBUTES_CONFIG" >> "$GITHUB_OUTPUT"
+
+      - name: Process and Save Configurations
+        run: |
+          VALID_ATTRIBUTES_CONFIG='${{ steps.read_valid_attributes.outputs.valid_attributes_config }}'
+          PROCESSED_DIR="${{ env.PROCESSED_OUTPUT_DIR }}"
+          RAW_DIR="${{ env.RAW_OUTPUT_DIR }}"
+
+          mkdir -p "$PROCESSED_DIR"
+          mkdir -p "$PROCESSED_DIR/security_systems"
+          mkdir -p "$PROCESSED_DIR/connections"
+          mkdir -p "$PROCESSED_DIR/endpoints"
+
+          # Function to process a single JSON file
+          process_file() {
+            local type=$1 # e.g., "connection", "securitySystem", "endpoint"
+            local file_path=$2
+            local id=$(basename "$file_path" .json)
+            local config_json="$VALID_ATTRIBUTES_CONFIG"
+
+            echo "  Processing $type: $id"
+            local processed_json=$(cat "$file_path")
+
+            # Apply exclude rules
+            local exclude_keys=$(echo "$config_json" | jq -r ".${type}[\"$id\"].exclude[]? // empty")
+            if [ -n "$exclude_keys" ]; then
+              for key in $exclude_keys; do
+                processed_json=$(echo "$processed_json" | jq "del(.$key)")
+              done
+              echo "    Excluded keys for $type $id: $exclude_keys"
+            fi
+
+            # Apply override rules
+            local override_map=$(echo "$config_json" | jq -c ".${type}[\"$id\"].override? // {}")
+            if [ "$(echo "$override_map" | jq 'length')" -gt 0 ]; then
+              # Merge the override map into the processed JSON
+              processed_json=$(echo "$processed_json" | jq --argjson overrides "$override_map" '. * $overrides')
+              echo "    Applied overrides for $type $id: $override_map"
+            fi
+
+            echo "$processed_json" > "$PROCESSED_DIR/${type}s/${id}.json"
+            echo "    Saved processed config to $PROCESSED_DIR/${type}s/${id}.json"
+          }
+
+          export -f process_file # Export function for find -exec
+
+          # Process Security Systems
+          echo "Processing Security Systems..."
+          find "$RAW_DIR/security_systems" -name "*.json" -exec bash -c 'process_file "securitySystem" "$0"' {} \;
+
+          # Process Connections
+          echo "Processing Connections..."
+          find "$RAW_DIR/connections" -name "*.json" -exec bash -c 'process_file "connection" "$0"' {} \;
+
+          # Process Endpoints
+          echo "Processing Endpoints..."
+          find "$RAW_DIR/endpoints" -name "*.json" -exec bash -c 'process_file "endpoint" "$0"' {} \;
+
+      - name: Upload Processed Configurations as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-configurations-processed
+          path: ${{ env.PROCESSED_OUTPUT_DIR }}/ # Upload the entire processed directory
