@@ -66,19 +66,20 @@ jobs:
           fi
           
           echo "config file ::${{ env.CONFIG_FILE_PATH }} read successfully"
-          # Read all arrays into distinct variables for iteration
-          # Using -r to get raw strings without quotes, and -c to ensure compact output for storing in variables
-          SECURITY_SYSTEMS=$(jq -r '.security_systems_to_sync[]' "${{ env.CONFIG_FILE_PATH }}")
-          CONNECTIONS=$(jq -r '.connections_to_sync[]' "${{ env.CONFIG_FILE_PATH }}")
-          ENDPOINTS=$(jq -r '.endpoints_to_sync[]' "${{ env.CONFIG_FILE_PATH }}")
+          # Read all arrays into compact JSON strings for passing as outputs
+          SECURITY_SYSTEMS_JSON=$(jq -c '.security_systems_to_sync' "${{ env.CONFIG_FILE_PATH }}")
+          CONNECTIONS_JSON=$(jq -c '.connections_to_sync' "${{ env.CONFIG_FILE_PATH }}")
+          ENDPOINTS_JSON=$(jq -c '.endpoints_to_sync' "${{ env.CONFIG_FILE_PATH }}")
 
-          # Output these for potential debugging or future use, though they are mostly consumed directly in the next step.
-          echo "security_systems_to_sync_list=$SECURITY_SYSTEMS"
-          echo "security_systems_to_sync_list=$SECURITY_SYSTEMS" >> "$GITHUB_OUTPUT"
-          echo "connections_to_sync_list=$CONNECTIONS"
-          echo "connections_to_sync_list=$CONNECTIONS" >> "$GITHUB_OUTPUT"
-          echo "endpoints_to_sync_list=$ENDPOINTS"
-          echo "endpoints_to_sync_list=$ENDPOINTS" >> "$GITHUB_OUTPUT"
+          # Output these as JSON strings
+          echo "security_systems_to_sync_json=$SECURITY_SYSTEMS_JSON" >> "$GITHUB_OUTPUT"
+          echo "connections_to_sync_json=$CONNECTIONS_JSON" >> "$GITHUB_OUTPUT"
+          echo "endpoints_to_sync_json=$ENDPOINTS_JSON" >> "$GITHUB_OUTPUT"
+
+          # Also log them for immediate visibility (optional)
+          echo "Security Systems JSON: $SECURITY_SYSTEMS_JSON"
+          echo "Connections JSON: $CONNECTIONS_JSON"
+          echo "Endpoints JSON: $ENDPOINTS_JSON"
 
       - name: Fetch and Save Individual Dev Configurations
         id: get_and_save_individual_dev_configs
@@ -93,10 +94,14 @@ jobs:
           mkdir -p ${{ env.RAW_OUTPUT_DIR }}/connections
           mkdir -p ${{ env.RAW_OUTPUT_DIR }}/endpoints
 
+          # Parse JSON outputs back into bash arrays for iteration
+          readarray -t SECURITY_SYSTEMS < <(echo "${{ steps.read_config_list.outputs.security_systems_to_sync_json }}" | jq -r '.[]')
+          readarray -t CONNECTIONS < <(echo "${{ steps.read_config_list.outputs.connections_to_sync_json }}" | jq -r '.[]')
+          readarray -t ENDPOINTS < <(echo "${{ steps.read_config_list.outputs.endpoints_to_sync_json }}" | jq -r '.[]')
+
           # Fetch Security Systems
           echo "Fetching and saving Dev Security Systems..."
-          IFS=$'\n' # Set Internal Field Separator to newline for iterating over input
-          for SYS_ID in ${{ steps.read_config_list.outputs.security_systems_to_sync_list }}; do
+          for SYS_ID in "${SECURITY_SYSTEMS[@]}"; do # Iterate over the bash array
             echo "  Fetching security system: $SYS_ID"
             SYS_DETAILS=$(curl -s -X GET \
               "${{ env.API_BASE_URL }}/ECM/api/v5/getSecuritySystems?systemname=$SYS_ID" \
@@ -104,9 +109,7 @@ jobs:
               -H "$CONTENT_TYPE")
             
             if [ -z "$SYS_DETAILS" ] || echo "$SYS_DETAILS" | jq -e 'has("error")' >/dev/null; then
-                echo "Warning: Could not fetch details for security system '$SYS_ID'. Response: $SYS_DETAILS"
-                # Changed from exit 1 to continue to allow other fetches to proceed,
-                # change to continue or exit 1 (based on what you want to do if individual config can not be fetched
+                echo "Error: Could not fetch details for security system '$SYS_ID'. Response: $SYS_DETAILS"
                 exit 1
             else
                 echo "$SYS_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/security_systems/${SYS_ID}.json"
@@ -116,7 +119,7 @@ jobs:
 
           # Fetch Connections (POST with JSON body)
           echo "Fetching and saving Dev Connections..."
-          for CONN_ID in ${{ steps.read_config_list.outputs.connections_to_sync_list }}; do
+          for CONN_ID in "${CONNECTIONS[@]}"; do # Iterate over the bash array
             echo "  Fetching connection: $CONN_ID"
             POST_DATA="{\"connectionname\": \"$CONN_ID\"}"
             
@@ -127,7 +130,7 @@ jobs:
               -d "$POST_DATA")
             
             if [ -z "$CONN_DETAILS" ] || echo "$CONN_DETAILS" | jq -e 'has("error")' >/dev/null; then
-                echo "Warning: Could not fetch details for connection '$CONN_ID'. Response: $CONN_DETAILS"
+                echo "Error: Could not fetch details for connection '$CONN_ID'. Response: $CONN_DETAILS"
                 exit 1
             else
                 echo "$CONN_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/connections/${CONN_ID}.json"
@@ -137,7 +140,7 @@ jobs:
 
           # Fetch Endpoints (POST with JSON body)
           echo "Fetching and saving Dev Endpoints..."
-          for ENDP_ID in ${{ steps.read_config_list.outputs.endpoints_to_sync_list }}; do
+          for ENDP_ID in "${ENDPOINTS[@]}"; do # Iterate over the bash array
             echo "  Fetching endpoint: $ENDP_ID"
             POST_DATA="{ \"filterCriteria1\": { \"endpointname\": \"$ENDP_ID\" } }"
             
@@ -148,15 +151,13 @@ jobs:
               -d "$POST_DATA")
             
             if [ -z "$ENDP_DETAILS" ] || echo "$ENDP_DETAILS" | jq -e 'has("error")' >/dev/null; then
-                echo "Warning: Could not fetch details for endpoint '$ENDP_ID'. Response: $ENDP_DETAILS"
+                echo "Error: Could not fetch details for endpoint '$ENDP_ID'. Response: $ENDP_DETAILS"
                 exit 1
             else
                 echo "$ENDP_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
                 echo "Saved ${{ env.RAW_OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
             fi
           done
-          
-          unset IFS # Restore IFS
 
       - name: Upload Fetched Raw Configurations as Artifact
         uses: actions/upload-artifact@v4
