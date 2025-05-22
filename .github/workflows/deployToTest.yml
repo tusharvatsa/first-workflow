@@ -95,9 +95,10 @@ jobs:
           mkdir -p ${{ env.RAW_OUTPUT_DIR }}/endpoints
 
           # Parse JSON outputs back into bash arrays for iteration
-          readarray -t SECURITY_SYSTEMS < <(echo "${{ steps.read_config_list.outputs.security_systems_to_sync_json }}" | jq -r '.[]')
-          readarray -t CONNECTIONS < <(echo "${{ steps.read_config_list.outputs.connections_to_sync_json }}" | jq -r '.[]')
-          readarray -t ENDPOINTS < <(echo "${{ steps.read_config_list.outputs.endpoints_to_sync_json }}" | jq -r '.[]')
+          # IMPORTANT: Wrap the GitHub Actions expression in single quotes to ensure jq receives valid JSON
+          readarray -t SECURITY_SYSTEMS < <(echo '${{ steps.read_config_list.outputs.security_systems_to_sync_json }}' | jq -r '.[]')
+          readarray -t CONNECTIONS < <(echo '${{ steps.read_config_list.outputs.connections_to_sync_json }}' | jq -r '.[]')
+          readarray -t ENDPOINTS < <(echo '${{ steps.read_config_list.outputs.endpoints_to_sync_json }}' | jq -r '.[]')
 
           # Fetch Security Systems
           echo "Fetching and saving Dev Security Systems..."
