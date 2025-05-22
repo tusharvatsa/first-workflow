@@ -14,7 +14,7 @@
       "override": {
         "connectionname": "zolo-ad-prod",
 		"description":"zolo-ad-prod",
-		"URL":"https://zolo-ad-prod-url"
+		"URL":"https://zolo-ad-prod-url",
         "USERNAME": "zolo-ad-prod-username",
         "PASSWORD": "zolo-ad-prod-password"
       }
