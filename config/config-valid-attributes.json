@@ -12,7 +12,9 @@
                 "status",
                 "connectionname",
 				"connectionType",
-				"connectiontype"
+				"connectiontype",
+				"isTimeoutSupported",
+				"isTimeoutConfigValidated"
             ],
             "override": {
                 "connectionName": "zolo-ad-prod",
@@ -35,7 +37,9 @@
                 "status",
                 "connectionname",
 				"connectionType",
-				"connectiontype"
+				"connectiontype",
+				"isTimeoutSupported",
+				"isTimeoutConfigValidated"
             ],
             "override": {
                 "connectionName": "zolo-ad-hrmaster-prod",
