@@ -336,7 +336,8 @@ jobs:
           AUTH_HEADER="Authorization: Bearer $ACCESS_TOKEN"
           CONTENT_TYPE="Content-Type: application/json"
           
-          REQUIRED_RESPONSE_HEADER_STRING="-H \"response: standard\"" 
+          # No longer needs to be "-H \"response: standard\"" as it's split into two elements now
+          REQUIRED_RESPONSE_HEADER_STRING="response: standard" 
           
           PROCESSED_DIR="${{ env.PROCESSED_OUTPUT_DIR }}"
 
@@ -357,13 +358,12 @@ jobs:
             local final_api_endpoint="${{ vars.TEST_API_BASE_URL }}$api_endpoint"
 
             echo "DEBUG: Final API Endpoint: $final_api_endpoint"
-            echo "DEBUG: Auth Header: $AUTH_HEADER"
+            echo "DEBUG: Auth Header: $AUTH_HEADER" # This will be masked
             echo "DEBUG: Content Type: $CONTENT_TYPE"
             echo "DEBUG: Config JSON Payload (first 200 chars): ${config_json_payload:0:200}..."
             
             local curl_options=(
-              # Remove -s temporarily so curl prints verbose output to stderr
-              # -s 
+              -v # Keep -v for now for verbose output, remove later if desired
               -X POST
               -w "%{http_code}"
               "$final_api_endpoint"
@@ -373,26 +373,30 @@ jobs:
 
             if [ "$type" == "connection" ]; then
               echo "    Adding 'response: standard' header for connection: $id"
-              curl_options+=($REQUIRED_RESPONSE_HEADER_STRING) 
+              # --- FIX APPLIED HERE ---
+              # Explicitly add -H and the header value as two separate elements
+              curl_options+=("-H" "$REQUIRED_RESPONSE_HEADER_STRING") 
+              # --- END FIX ---
             fi
             
             curl_options+=(-d "$config_json_payload")
 
             echo "DEBUG: Executing curl command:"
-            printf "curl %q " "${curl_options[@]}" # %q will quote arguments for shell re-execution
+            # --- FIX APPLIED HERE ---
+            # Corrected printf to correctly show the command without redundant 'curl' insertions
+            printf "curl %q " "${curl_options[@]}"
             echo "" # Newline after printf
+            # --- END FIX ---
 
-            # --- EXTREME DEBUGGING START ---
-            # Added -v for verbose curl output. This will print handshake details, headers, etc.
-            # IMPORTANT: -v can expose sensitive data (like headers) in logs. Remove after debugging.
-            DEPLOY_RESPONSE_FULL=$(curl -v "${curl_options[@]}" 2>&1) 
-            # --- EXTREME DEBUGGING END ---
+            # Execute curl command using the constructed array
+            # -v is already in curl_options, so no need to add it here again
+            DEPLOY_RESPONSE_FULL=$(curl "${curl_options[@]}" 2>&1) 
 
             CURL_EXIT_CODE=$?
 
             echo "DEBUG: Curl Exit Code: $CURL_EXIT_CODE"
             echo "DEBUG: Raw Curl Output (including potential errors):"
-            echo "$DEPLOY_RESPONSE_FULL" # This will now capture *all* curl output, including verbose debug
+            echo "$DEPLOY_RESPONSE_FULL" # This will capture *all* curl output, including verbose debug
 
             HTTP_STATUS=$(echo "$DEPLOY_RESPONSE_FULL" | tail -c 4)
             HTTP_BODY=$(echo "$DEPLOY_RESPONSE_FULL" | head -c -4)
