@@ -1,73 +1,78 @@
 {
-  "connection": {
-    "zolo-ad": {
-      "exclude": [
-	    "msg",
-		"LAST_IMPORT_TIME",
-        "updatedby",
-        "connectionkey",
-        "createdon",
-        "createdby",
-        "errorcode",
-        "status",
-		"connectionname"
-      ],
-      "override": {
-        "connectionName": "zolo-ad-prod",
-		"description":"zolo-ad-prod",
-		"URL":"ldaps://zolo-ad-prod-url",
-        "USERNAME": "zolo-ad-prod-username",
-        "PASSWORD": "zolo-ad-prod-password"
-      }
+    "connection": {
+        "zolo-ad": {
+            "exclude": [
+                "msg",
+                "LAST_IMPORT_TIME",
+                "updatedby",
+                "connectionkey",
+                "createdon",
+                "createdby",
+                "errorcode",
+                "status",
+                "connectionname"
+            ],
+            "override": {
+                "connectionName": "zolo-ad-prod",
+                "description": "zolo-ad-prod",
+                "URL": "ldaps://zolo-ad-prod-url",
+                "USERNAME": "zolo-ad-prod-username",
+                "PASSWORD": "zolo-ad-prod-password"
+            }
+        },
+        "zolo-ad-hrmaster": {
+            "exclude": [
+                "msg",
+                "LAST_IMPORT_TIME",
+                "updatedby",
+                "connectionkey",
+                "createdon",
+                "createdby",
+                "errorcode",
+                "status",
+                "connectionname"
+            ],
+            "override": {
+                "connectionName": "zolo-ad-hrmaster-prod",
+                "description": "zolo-ad-hrmaster-prod",
+                "URL": "ldaps://zolo-ad-hrmaster-prod-url",
+                "USERNAME": "zolo-ad-hrmaster-prod-username",
+                "PASSWORD": "zolo-ad-hrmaster-prod-password"
+            }
+        }
     },
-    "zolo-ad-hrmaster": {
-      "exclude": [
-        "updatedby",
-        "connectionkey",
-        "createdon",
-        "createdby",
-        "errorcode",
-        "status"
-      ],
-      "override": {
-        "connectionname": "zolo-ad-hrmaster-test",
-        "username": "zolo-ad-test-username",
-        "PASSWORD": "zolo-ad-test-password"
-      }
+    "securitySystem": {
+        "zolo-ad": {
+            "exclude": [
+                "updatedby",
+                "connectionkey",
+                "createdon",
+                "createdby",
+                "errorcode",
+                "status"
+            ],
+            "override": {
+                "connectionname": "",
+                "username": "",
+                "PASSWORD": ""
+            }
+        }
+    },
+    "endpoint": {
+        "zolo-ad": {
+            "exclude": [
+                "updatedby",
+                "connectionkey",
+                "createdon",
+                "createdby",
+                "errorcode",
+                "status"
+            ],
+            "override": {
+                "connectionname": "",
+                "username": "",
+                "PASSWORD": ""
+            }
+        }
     }
-  },
-  "securitySystem": {
-    "zolo-ad": {
-      "exclude": [
-        "updatedby",
-        "connectionkey",
-        "createdon",
-        "createdby",
-        "errorcode",
-        "status"
-      ],
-      "override": {
-        "connectionname": "",
-        "username": "",
-        "PASSWORD": ""
-      }
-    }
-  },
-  "endpoint": {
-    "zolo-ad": {
-      "exclude": [
-        "updatedby",
-        "connectionkey",
-        "createdon",
-        "createdby",
-        "errorcode",
-        "status"
-      ],
-      "override": {
-        "connectionname": "",
-        "username": "",
-        "PASSWORD": ""
-      }
-    }
-  }
 }
