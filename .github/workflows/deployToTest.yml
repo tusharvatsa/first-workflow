@@ -3,6 +3,9 @@ name: Deploy Dev to Test
 run-name: Deploy to ${{ inputs.environment }} by @${{ github.actor }} triggered manually
 
 on:
+  # push: # Removed push trigger as requested
+  #   branches:
+  #     - main # Trigger when changes are pushed to the 'main' branch
   workflow_dispatch: # Allows manual triggering from the GitHub UI
     inputs:
       environment:
@@ -14,6 +17,7 @@ on:
           - test
 
 env:
+  # API_BASE_URL is now managed at the environment level via GitHub Environment variables (vars)
   CONFIG_FILE_PATH: 'config/config-dev-to-test-sync.json' # Path to your configuration list file
   VALID_ATTRIBUTES_CONFIG_PATH: 'config/config-valid-attributes.json' # Path to your valid attributes file
   RAW_OUTPUT_DIR: 'fetched_configs_raw' # Base directory to save all fetched JSON files
@@ -49,7 +53,7 @@ jobs:
           fi
 
           ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.accessToken')
-          # Do NOT echo AccessToken for direct logging; GitHub masks secrets automatically.
+          # For security, avoid echoing AccessToken directly to logs. GitHub Actions masks secrets automatically.
           echo "accessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
         env:
           DEV_API_USERNAME: ${{ secrets.DEV_API_USERNAME }}
@@ -64,14 +68,17 @@ jobs:
           fi
           
           echo "config file ::${{ env.CONFIG_FILE_PATH }} read successfully"
+          # Read all arrays into compact JSON strings for passing as outputs
           SECURITY_SYSTEMS_JSON=$(jq -c '.security_systems_to_sync' "${{ env.CONFIG_FILE_PATH }}")
           CONNECTIONS_JSON=$(jq -c '.connections_to_sync' "${{ env.CONFIG_FILE_PATH }}")
           ENDPOINTS_JSON=$(jq -c '.endpoints_to_sync' "${{ env.CONFIG_FILE_PATH }}")
 
+          # Output these as JSON strings
           echo "security_systems_to_sync_json=$SECURITY_SYSTEMS_JSON" >> "$GITHUB_OUTPUT"
           echo "connections_to_sync_json=$CONNECTIONS_JSON" >> "$GITHUB_OUTPUT"
           echo "endpoints_to_sync_json=$ENDPOINTS_JSON" >> "$GITHUB_OUTPUT"
 
+          # Also log them for immediate visibility (optional)
           echo "Security Systems JSON: $SECURITY_SYSTEMS_JSON"
           echo "Connections JSON: $CONNECTIONS_JSON"
           echo "Endpoints JSON: $ENDPOINTS_JSON"
@@ -83,32 +90,41 @@ jobs:
           AUTH_HEADER="Authorization: Bearer $ACCESS_TOKEN"
           CONTENT_TYPE="Content-Type: application/json"
 
-          mkdir -p ${{ env.RAW_OUTPUT_DIR }}/securitySystems # Changed from security_systems for consistency
+          # Create base output directory with consistent naming (securitySystems)
+          mkdir -p ${{ env.RAW_OUTPUT_DIR }}
+          mkdir -p ${{ env.RAW_OUTPUT_DIR }}/securitySystems
           mkdir -p ${{ env.RAW_OUTPUT_DIR }}/connections
           mkdir -p ${{ env.RAW_OUTPUT_DIR }}/endpoints
 
+          # Parse JSON outputs back into bash arrays for iteration
+          # IMPORTANT: Wrap the GitHub Actions expression in single quotes to ensure jq receives valid JSON
           readarray -t SECURITY_SYSTEMS < <(echo '${{ steps.read_config_list.outputs.security_systems_to_sync_json }}' | jq -r '.[]')
           readarray -t CONNECTIONS < <(echo '${{ steps.read_config_list.outputs.connections_to_sync_json }}' | jq -r '.[]')
           readarray -t ENDPOINTS < <(echo '${{ steps.read_config_list.outputs.endpoints_to_sync_json }}' | jq -r '.[]')
 
+          # Fetch Security Systems
           echo "Fetching and saving Dev Security Systems..."
-          for SYS_ID in "${SECURITY_SYSTEMS[@]}"; do
+          for SYS_ID in "${SECURITY_SYSTEMS[@]}"; do # Iterate over the bash array
             echo "  Fetching security system: $SYS_ID"
             SYS_DETAILS=$(curl -s -X GET \
               "${{ vars.DEV_API_BASE_URL }}/ECM/api/v5/getSecuritySystems?systemname=$SYS_ID" \
               -H "$AUTH_HEADER" \
               -H "$CONTENT_TYPE")
             
+            # Check if API response is valid JSON and not empty
             if echo "$SYS_DETAILS" | jq -e . >/dev/null && [ "$(echo "$SYS_DETAILS" | jq 'length')" -gt 0 ]; then
-                echo "$SYS_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/securitySystems/${SYS_ID}.json" # Changed from security_systems
+                echo "$SYS_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/securitySystems/${SYS_ID}.json" # Consistent naming
                 echo "Saved ${{ env.RAW_OUTPUT_DIR }}/securitySystems/${SYS_ID}.json"
             else
                 echo "Warning: Could not fetch valid details for security system '$SYS_ID'. Response: $SYS_DETAILS"
+                # Do NOT exit 1 here, allow other fetches to continue.
+                # If a file is not found, it will be skipped in the processing step.
             fi
           done
 
+          # Fetch Connections (POST with JSON body)
           echo "Fetching and saving Dev Connections..."
-          for CONN_ID in "${CONNECTIONS[@]}"; do
+          for CONN_ID in "${CONNECTIONS[@]}"; do # Iterate over the bash array
             echo "  Fetching connection: $CONN_ID"
             POST_DATA="{\"connectionname\": \"$CONN_ID\"}"
             
@@ -126,8 +142,9 @@ jobs:
             fi
           done
 
+          # Fetch Endpoints (POST with JSON body)
           echo "Fetching and saving Dev Endpoints..."
-          for ENDP_ID in "${ENDPOINTS[@]}"; do
+          for ENDP_ID in "${ENDPOINTS[@]}"; do # Iterate over the bash array
             echo "  Fetching endpoint: $ENDP_ID"
             POST_DATA="{ \"filterCriteria1\": { \"endpointname\": \"$ENDP_ID\" } }"
             
@@ -154,11 +171,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dev-configurations-raw
-          path: ${{ env.RAW_OUTPUT_DIR }}/
+          path: ${{ env.RAW_OUTPUT_DIR }}/ # Upload the entire base directory
 
   process_configurations:
     runs-on: ubuntu-latest
-    needs: prepare_test_deployment
+    needs: prepare_test_deployment # This job depends on the successful completion of the previous job
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -170,7 +187,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dev-configurations-raw
-          path: ${{ env.RAW_OUTPUT_DIR }}
+          path: ${{ env.RAW_OUTPUT_DIR }} # Download to the same path as it was uploaded from
 
       - name: List Raw Configurations (after download)
         run: |
@@ -192,37 +209,44 @@ jobs:
 
       - name: Process and Save Configurations
         run: |
+          # Retrieve the path to the valid attributes config file
           VALID_ATTRIBUTES_CONFIG_PATH="${{ steps.read_valid_attributes.outputs.valid_attributes_config_path }}"
           PROCESSED_DIR="${{ env.PROCESSED_OUTPUT_DIR }}"
           RAW_DIR="${{ env.RAW_OUTPUT_DIR }}"
 
           mkdir -p "$PROCESSED_DIR"
-          mkdir -p "$PROCESSED_DIR/securitySystems"
+          mkdir -p "$PROCESSED_DIR/securitySystems" # Consistent naming
           mkdir -p "$PROCESSED_DIR/connections"
           mkdir -p "$PROCESSED_DIR/endpoints"
 
+          # Read the config_json once from the temporary file
           local_valid_attributes_config=$(cat "$VALID_ATTRIBUTES_CONFIG_PATH" | jq '.')
 
+          # Function to process a single JSON file
           process_single_file() {
             local type=$1 # e.g., "connection", "securitySystem", "endpoint"
             local file_path=$2 # Full path to the raw file
             local id=$(basename "$file_path" .json)
-            local config_json="$local_valid_attributes_config"
+            local config_json="$local_valid_attributes_config" # Use the pre-read config
 
             echo "  Processing $type: $id (File: $file_path)"
             
+            # Check if the file exists before attempting to read it
             if [ ! -f "$file_path" ]; then
                 echo "Error: File not found at '$file_path'. Skipping processing for $id."
-                return 1
+                return 1 # Indicate failure for this specific file
             fi
 
             local processed_json=$(cat "$file_path")
 
+            # Apply specific transformation for 'connection' type to flatten 'connectionattributes'
             if [ "$type" == "connection" ]; then
                 echo "    Flattening 'connectionattributes' for connection: $id"
+                # Merge .connectionattributes into the root and then delete .connectionattributes
                 processed_json=$(echo "$processed_json" | jq '. + .connectionattributes | del(.connectionattributes)')
             fi
 
+            # Apply exclude rules
             local exclude_keys=$(echo "$config_json" | jq -r ".${type}[\"$id\"].exclude[]? // empty")
             if [ -n "$exclude_keys" ]; then
               for key in $exclude_keys; do
@@ -231,28 +255,35 @@ jobs:
               echo "    Excluded keys for $type $id: $exclude_keys"
             fi
 
+            # Apply override rules
             local override_map=$(echo "$config_json" | jq -c ".${type}[\"$id\"].override? // {}")
             if [ "$(echo "$override_map" | jq 'length')" -gt 0 ]; then
+              # Merge the override map into the processed JSON
               processed_json=$(echo "$processed_json" | jq --argjson overrides "$override_map" '. * $overrides')
               echo "    Applied overrides for $type $id: $override_map"
             fi
 
+            # The output path now correctly uses "${type}s" which for "securitySystem" becomes "securitySystems"
             echo "$processed_json" > "$PROCESSED_DIR/${type}s/${id}.json"
             echo "    Saved processed config to $PROCESSED_DIR/${type}s/${id}.json"
-            return 0
+            return 0 # Indicate success
           }
 
+          # Process Security Systems
           echo "Processing Security Systems..."
-          if [ -d "$RAW_DIR/securitySystems" ]; then # Changed from security_systems
-            for file in "$RAW_DIR/securitySystems"/*.json; do # Changed from security_systems
+          if [ -d "$RAW_DIR/securitySystems" ]; then # Consistent naming
+            for file in "$RAW_DIR/securitySystems"/*.json; do # Consistent naming
+              # The glob pattern will return the pattern itself if no files match.
+              # Check if it's a real file before calling the function.
               if [ -f "$file" ]; then
                 process_single_file "securitySystem" "$file"
               fi
             done
           else
-            echo "Warning: Directory '$RAW_DIR/securitySystems' does not exist." # Changed from security_systems
+            echo "Warning: Directory '$RAW_DIR/securitySystems' does not exist." # Consistent naming
           fi
 
+          # Process Connections
           echo "Processing Connections..."
           if [ -d "$RAW_DIR/connections" ]; then
             for file in "$RAW_DIR/connections"/*.json; do
@@ -264,6 +295,7 @@ jobs:
             echo "Warning: Directory '$RAW_DIR/connections' does not exist."
           fi
 
+          # Process Endpoints
           echo "Processing Endpoints..."
           if [ -d "$RAW_DIR/endpoints" ]; then
             for file in "$RAW_DIR/endpoints"/*.json; do
@@ -279,13 +311,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dev-configurations-processed
-          path: ${{ env.PROCESSED_OUTPUT_DIR }}/
+          path: ${{ env.PROCESSED_OUTPUT_DIR }}/ # Upload the entire processed directory
 
   deploy_to_test_environment:
     runs-on: ubuntu-latest
-    needs: process_configurations
+    needs: process_configurations # This job depends on the successful processing of configurations
     environment:
-      name: test_env
+      name: test_env # Link to your 'test_env' GitHub Environment for secrets/protection
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -297,7 +329,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dev-configurations-processed
-          path: ${{ env.PROCESSED_OUTPUT_DIR }}
+          path: ${{ env.PROCESSED_OUTPUT_DIR }} # Download to the same path as it was uploaded from
 
       - name: List Processed Configurations (after download)
         run: |
@@ -322,7 +354,7 @@ jobs:
           fi
 
           ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.accessToken')
-          # Do NOT echo AccessToken for direct logging; GitHub masks secrets automatically.
+          # For security, avoid echoing AccessToken directly to logs. GitHub Actions masks secrets automatically.
           echo "accessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
         env:
           TEST_API_USERNAME: ${{ secrets.TEST_API_USERNAME }}
@@ -334,83 +366,104 @@ jobs:
           AUTH_HEADER="Authorization: Bearer $ACCESS_TOKEN"
           CONTENT_TYPE="Content-Type: application/json"
           
-          # Defined correctly within the shell script to ensure it's not parsed by YAML directly
-          # This will send an HTTP header: "response: standard"
-          REQUIRED_RESPONSE_HEADER="response: standard" 
+          # Define the required header string to be conditionally added
+          REQUIRED_RESPONSE_HEADER_STRING="-H \"response: standard\"" 
           
           PROCESSED_DIR="${{ env.PROCESSED_OUTPUT_DIR }}"
 
+          # Function to push a single configuration file
           push_single_config() {
-            local type=$1
-            local file_path=$2
-            local api_endpoint=$3
+            local type=$1 # e.g., "securitySystem", "connection", "endpoint"
+            local file_path=$2 # Full path to the processed file
+            local api_endpoint=$3 # API endpoint for this type (e.g., /ECM/api/v5/createSecuritySystem)
             local id=$(basename "$file_path" .json)
 
             echo "  Pushing $type: $id to $api_endpoint (File: $file_path)"
             
             if [ ! -f "$file_path" ]; then
                 echo "Error: Processed file not found at '$file_path'. Skipping deployment for $id."
-                return 1
+                return 1 # Indicate failure for this specific file
             fi
 
             local config_json_payload=$(cat "$file_path")
             local final_api_endpoint="${{ vars.TEST_API_BASE_URL }}$api_endpoint"
+            
+            # Initialize curl_options with common headers
+            local curl_options=(
+              -s
+              -X POST
+              -w "%{http_code}"
+              "$final_api_endpoint"
+              -H "$AUTH_HEADER"
+              -H "$CONTENT_TYPE"
+            )
 
-            # The problematic header is now correctly passed as a variable here
-            DEPLOY_RESPONSE_FULL=$(curl -s -X POST \
-              -w "%{http_code}" \
-              "$final_api_endpoint" \
-              -H "$AUTH_HEADER" \
-              -H "$CONTENT_TYPE" \
-              -H "$REQUIRED_RESPONSE_HEADER" \
-              -d "$config_json_payload")
+            # Conditionally add the specific header for 'connection' type
+            if [ "$type" == "connection" ]; then
+              echo "    Adding 'response: standard' header for connection: $id"
+              # Append the string "-H \"response: standard\"" to the options array
+              curl_options+=($REQUIRED_RESPONSE_HEADER_STRING) 
+            fi
+            
+            # Add the data payload
+            curl_options+=(-d "$config_json_payload")
+
+            # Execute curl command using the constructed array
+            DEPLOY_RESPONSE_FULL=$(curl "${curl_options[@]}")
               
+            # Extract the HTTP status code (last 3 characters)
             HTTP_STATUS=$(echo "$DEPLOY_RESPONSE_FULL" | tail -c 4)
+            # Better way to split: Everything but the last 4 characters
             HTTP_BODY=$(echo "$DEPLOY_RESPONSE_FULL" | head -c -4)
 
+            # Trim potential whitespace from HTTP_STATUS (important for comparison)
             HTTP_STATUS=$(echo "$HTTP_STATUS" | xargs)
 
             echo "    HTTP Status Code: $HTTP_STATUS"
             echo "    API Response Body: $HTTP_BODY"
             
-            if [[ "$HTTP_STATUS" =~ ^2[0-9]{2}$ ]]; then
+            # Check for API response success based on HTTP status code (2xx for success)
+            if [[ "$HTTP_STATUS" =~ ^2[0-9]{2}$ ]]; then # Checks if status code starts with 2 (200-299)
+                # Further check JSON body if necessary for specific API success messages
                 if echo "$HTTP_BODY" | jq -e '.msg == "success"' >/dev/null; then
                     echo "    Successfully deployed $type: $id."
                 else
                     echo "Warning: Deployment for $type: $id succeeded with HTTP $HTTP_STATUS, but JSON response indicates potential issue. Response: $HTTP_BODY"
-                    # Consider making this an 'exit 1' if a non-success msg is critical
+                    # You might choose to exit 1 here depending on strictness of API success message
                 fi
             else
                 echo "Error: Failed to deploy $type: $id. HTTP Status: $HTTP_STATUS. Response: $HTTP_BODY"
+                # Exit with an error code to fail the step if deployment fails
                 return 1
             fi
             return 0
           }
 
+          # Push Connections, connections must be updated before other objects
           echo "Pushing Connections to Test Environment..."
           if [ -d "$PROCESSED_DIR/connections" ]; then
             for file in "$PROCESSED_DIR/connections"/*.json; do
               if [ -f "$file" ]; then
-                push_single_config "connection" "$file" "/ECM/api/v5/testConnection"
+                push_single_config "connection" "$file" "/ECM/api/v5/testConnection" # testConnection also updates/creates and runs a test connection
               fi
             done
           else
             echo "Warning: Processed directory '$PROCESSED_DIR/connections' does not exist."
           fi
           
-          # Uncomment and adjust API endpoints when ready to deploy Security Systems and Endpoints
-
+          # Push Security Systems
           echo "Pushing Security Systems to Test Environment..."
-          if [ -d "$PROCESSED_DIR/securitySystems" ]; then
-            for file in "$PROCESSED_DIR/securitySystems"/*.json; do
+          if [ -d "$PROCESSED_DIR/securitySystems" ]; then # Consistent naming
+            for file in "$PROCESSED_DIR/securitySystems"/*.json; do # Consistent naming
               if [ -f "$file" ]; then
                 push_single_config "securitySystem" "$file" "/ECM/api/vx/createSecuritySystem" # Adjust API endpoint as needed
               fi
             done
           else
-            echo "Warning: Processed directory '$PROCESSED_DIR/securitySystems' does not exist."
+            echo "Warning: Processed directory '$PROCESSED_DIR/securitySystems' does not exist." # Consistent naming
           fi
 
+          # Push Endpoints
           echo "Pushing Endpoints to Test Environment..."
           if [ -d "$PROCESSED_DIR/endpoints" ]; then
             for file in "$PROCESSED_DIR/endpoints"/*.json; do
