@@ -1,5 +1,7 @@
 name: Deploy Dev to Test
 
+run-name: Deploy to ${{ inputs.environment }} by @${{ github.actor }} triggered manually
+
 on:
   # push: # Removed push trigger as requested
   #   branches:
