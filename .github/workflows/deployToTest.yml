@@ -364,6 +364,7 @@ jobs:
           ACCESS_TOKEN="${{ steps.get_test_token.outputs.accessToken }}"
           AUTH_HEADER="Authorization: Bearer $ACCESS_TOKEN"
           CONTENT_TYPE="Content-Type: application/json"
+          STANDARD_RESPONSE_FOR_CONNECTION="response: standard"
           PROCESSED_DIR="${{ env.PROCESSED_OUTPUT_DIR }}"
 
           # Function to push a single configuration file, this is defined here and used afterwards
@@ -392,21 +393,42 @@ jobs:
             # handles upserts via POST. For simplicity, we'll stick to POST for now,
             # assuming your API either creates or updates via POST.
 
-            DEPLOY_RESPONSE=$(curl -s -X POST \
+            DEPLOY_RESPONSE_FULL=$(curl -s -X POST \
+              -w "%{http_code}"
               "$final_api_endpoint" \
               -H "$AUTH_HEADER" \
               -H "$CONTENT_TYPE" \
+              -H "$STANDARD_RESPONSE_FOR_CONNECTION" \
               -d "$config_json_payload")
-            
-            # Check for API response success (adjust based on your API's success response)
-            if echo "$DEPLOY_RESPONSE" | jq -e '.msg == "success"' >/dev/null; then # Assuming a 'msg: success' response
-                echo "    Successfully deployed $type: $id. Response: $DEPLOY_RESPONSE"
-            else
-                echo "Error: Failed to deploy $type: $id. Response: $DEPLOY_RESPONSE"
-                # You might want to exit 1 here if a single deployment failure is critical
-            fi
-            return 0
-          }
+              
+            # Extract the HTTP status code (last 3 characters)
+            HTTP_STATUS=$(echo "$DEPLOY_RESPONSE_FULL" | tail -c 4) # Get last 3 chars + newline, or just last 3
+            # Better way to split:
+            HTTP_BODY=$(echo "$DEPLOY_RESPONSE_FULL" | head -c -4) # Everything but the last 4 characters
+
+            # Trim potential whitespace from HTTP_STATUS (important for comparison)
+            HTTP_STATUS=$(echo "$HTTP_STATUS" | xargs)
+
+            echo "    HTTP Status Code: $HTTP_STATUS"
+            echo "    API Response Body: $HTTP_BODY"
+            
+            # Check for API response success based on HTTP status code (2xx for success)
+            # You can adjust this range (e.g., only 200, or 200-201, etc.)
+            if [[ "$HTTP_STATUS" =~ ^2[0-9]{2}$ ]]; then # Checks if status code starts with 2 (200-299)
+                # Further check JSON body if necessary for specific API success messages
+                if echo "$HTTP_BODY" | jq -e '.msg == "success"' >/dev/null; then
+                    echo "    Successfully deployed $type: $id."
+                else
+                    echo "Warning: Deployment for $type: $id succeeded with HTTP $HTTP_STATUS, check response for errors. Response: $HTTP_BODY"
+                    # You might choose to exit 1 here depending on strictness
+                fi
+            else
+                echo "Error: Failed to deploy $type: $id. HTTP Status: $HTTP_STATUS. Response: $HTTP_BODY"
+                # Exit with an error code to fail the step if deployment fails
+                return 1
+            fi
+            return 0
+          }
 
           # Push Connections, connections must be updated before other objects
           echo "Pushing Connections to Test Environment..."
