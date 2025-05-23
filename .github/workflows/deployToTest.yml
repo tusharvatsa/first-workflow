@@ -407,7 +407,7 @@ jobs:
             
             # Add the data payload
             curl_options+=(-d "$config_json_payload")
-
+            echo "Curl options finalized"
             # Execute curl command using the constructed array
             DEPLOY_RESPONSE_FULL=$(curl "${curl_options[@]}")
               
