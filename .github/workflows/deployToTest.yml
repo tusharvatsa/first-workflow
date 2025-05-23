@@ -12,6 +12,14 @@ on:
         type: choice
         options:
           - test
+      loglevel: # New input for controlling logging verbosity
+        description: 'Set logging level (DEBUG for verbose output)'
+        required: true
+        default: 'INFO'
+        type: choice
+        options:
+          - INFO
+          - DEBUG
 
 env:
   CONFIG_FILE_PATH: 'config/config-dev-to-test-sync.json' # Path to your configuration list file
@@ -315,7 +323,7 @@ jobs:
                   }')
           
           if [ "$(echo "$TOKEN_RESPONSE" | jq -r '.accessToken')" == "null" ]; then
-            echo "Error: Failed to fetch access token for test environment."
+            echo "Error: Failed to fetch access token."
             echo "$TOKEN_RESPONSE"
             exit 1
           fi
@@ -328,15 +336,15 @@ jobs:
 
       - name: Push Configurations to Test Environment
         run: |
-          # --- EXTREME DEBUGGING START ---
-          set -euxo pipefail # -e: exit on error; -u: error on unset vars; -x: print commands; -o pipefail: pipeline fails if any command fails
-          # --- EXTREME DEBUGGING END ---
+          # Conditional shell debugging based on loglevel input
+          if [[ "${{ github.event.inputs.loglevel }}" == "DEBUG" ]]; then
+            set -euxo pipefail # -e: exit on error; -u: error on unset vars; -x: print commands; -o pipefail: pipeline fails if any command fails
+          fi
 
           ACCESS_TOKEN="${{ steps.get_test_token.outputs.accessToken }}"
           AUTH_HEADER="Authorization: Bearer $ACCESS_TOKEN"
           CONTENT_TYPE="Content-Type: application/json"
           
-          # No longer needs to be "-H \"response: standard\"" as it's split into two elements now
           REQUIRED_RESPONSE_HEADER_STRING="response: standard" 
           
           PROCESSED_DIR="${{ env.PROCESSED_OUTPUT_DIR }}"
@@ -357,46 +365,57 @@ jobs:
             local config_json_payload=$(cat "$file_path")
             local final_api_endpoint="${{ vars.TEST_API_BASE_URL }}$api_endpoint"
 
-            echo "DEBUG: Final API Endpoint: $final_api_endpoint"
-            echo "DEBUG: Auth Header: $AUTH_HEADER" # This will be masked
-            echo "DEBUG: Content Type: $CONTENT_TYPE"
-            echo "DEBUG: Config JSON Payload (first 200 chars): ${config_json_payload:0:200}..."
+            # Conditional DEBUG logging
+            if [[ "${{ github.event.inputs.loglevel }}" == "DEBUG" ]]; then
+              echo "DEBUG: Final API Endpoint: $final_api_endpoint"
+              echo "DEBUG: Auth Header: $AUTH_HEADER" # This will be masked
+              echo "DEBUG: Content Type: $CONTENT_TYPE"
+              echo "DEBUG: Config JSON Payload (first 200 chars): ${config_json_payload:0:200}..."
+            fi
             
             local curl_options=(
-              -s                            # Keep -v for now for verbose output, remove later if desired
-              -X POST
-              -w "%{http_code}"
-              "$final_api_endpoint"
-              -H "$AUTH_HEADER"
-              -H "$CONTENT_TYPE"
+              # Conditionally add -v or -s based on loglevel
+              # -v for DEBUG, -s for INFO
+              # Use conditional logic here to add the correct option
             )
+
+            if [[ "${{ github.event.inputs.loglevel }}" == "DEBUG" ]]; then
+                curl_options+=("-v") # Verbose output for DEBUG
+            else
+                curl_options+=("-s") # Silent output for INFO
+            fi
+
+            curl_options+=("-X" "POST")
+            curl_options+=("-w" "%{http_code}")
+            curl_options+=("$final_api_endpoint")
+            curl_options+=("-H" "$AUTH_HEADER")
+            curl_options+=("-H" "$CONTENT_TYPE")
 
             if [ "$type" == "connection" ]; then
               echo "    Adding 'response: standard' header for connection: $id"
-              # --- FIX APPLIED HERE ---
-              # Explicitly add -H and the header value as two separate elements
               curl_options+=("-H" "$REQUIRED_RESPONSE_HEADER_STRING") 
-              # --- END FIX ---
             fi
             
-            curl_options+=(-d "$config_json_payload")
+            curl_options+=("-d" "$config_json_payload")
 
-            echo "DEBUG: Executing curl command:"
-            # --- FIX APPLIED HERE ---
-            # Corrected printf to correctly show the command without redundant 'curl' insertions
-            printf "curl %q " "${curl_options[@]}"
-            echo "" # Newline after printf
-            # --- END FIX ---
+            # Conditional DEBUG logging for the curl command itself
+            if [[ "${{ github.event.inputs.loglevel }}" == "DEBUG" ]]; then
+              echo "DEBUG: Executing curl command:"
+              printf "curl %q " "${curl_options[@]}"
+              echo "" # Newline after printf
+            fi
 
             # Execute curl command using the constructed array
-            # -v is already in curl_options, so no need to add it here again
             DEPLOY_RESPONSE_FULL=$(curl "${curl_options[@]}" 2>&1) 
 
             CURL_EXIT_CODE=$?
 
-            echo "DEBUG: Curl Exit Code: $CURL_EXIT_CODE"
-            echo "DEBUG: Raw Curl Output (including potential errors):"
-            echo "$DEPLOY_RESPONSE_FULL" # This will capture *all* curl output, including verbose debug
+            # Conditional DEBUG logging
+            if [[ "${{ github.event.inputs.loglevel }}" == "DEBUG" ]]; then
+              echo "DEBUG: Curl Exit Code: $CURL_EXIT_CODE"
+              echo "DEBUG: Raw Curl Output (including potential errors):"
+              echo "$DEPLOY_RESPONSE_FULL" # This will capture *all* curl output, including verbose debug
+            fi
 
             HTTP_STATUS=$(echo "$DEPLOY_RESPONSE_FULL" | tail -c 4)
             HTTP_BODY=$(echo "$DEPLOY_RESPONSE_FULL" | head -c -4)
