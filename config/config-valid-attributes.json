@@ -12,7 +12,6 @@
                 "status",
                 "connectionname",
 				"connectionType",
-				"connectiontype",
 				"isTimeoutSupported",
 				"isTimeoutConfigValidated"
             ],
@@ -22,7 +21,7 @@
                 "URL": "ldaps://zolo-ad-prod-url",
                 "USERNAME": "zolo-ad-prod-username",
                 "PASSWORD": "zolo-ad-prod-password",
-				"connectionType" : "AD"
+				"connectiontype" : "AD"
             }
         },
         "zolo-ad-hrmaster": {
@@ -37,7 +36,6 @@
                 "status",
                 "connectionname",
 				"connectionType",
-				"connectiontype",
 				"isTimeoutSupported",
 				"isTimeoutConfigValidated"
             ],
@@ -47,7 +45,7 @@
                 "URL": "ldaps://zolo-ad-hrmaster-prod-url",
                 "USERNAME": "zolo-ad-hrmaster-prod-username",
                 "PASSWORD": "zolo-ad-hrmaster-prod-password",
-				"connectionType": "AD"
+				"connectiontype": "AD"
             }
         }
     },
