@@ -111,7 +111,8 @@ jobs:
                 echo "$SYS_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/securitySystems/${SYS_ID}.json"
                 echo "Saved ${{ env.RAW_OUTPUT_DIR }}/securitySystems/${SYS_ID}.json"
             else
-                echo "Warning: Could not fetch valid details for security system '$SYS_ID'. Response: $SYS_DETAILS"
+                # Changed to GitHub Actions warning command
+                echo "::warning::Could not fetch valid details for security system '$SYS_ID'. Response: $SYS_DETAILS"
             fi
           done
 
@@ -130,7 +131,8 @@ jobs:
                 echo "$CONN_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/connections/${CONN_ID}.json"
                 echo "Saved ${{ env.RAW_OUTPUT_DIR }}/connections/${CONN_ID}.json"
             else
-                echo "Warning: Could not fetch valid details for connection '$CONN_ID'. Response: "$CONN_DETAILS""
+                # Changed to GitHub Actions warning command
+                echo "::warning::Could not fetch valid details for connection '$CONN_ID'. Response: "$CONN_DETAILS""
             fi
           done
 
@@ -149,7 +151,8 @@ jobs:
                 echo "$ENDP_DETAILS" > "${{ env.RAW_OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
                 echo "Saved ${{ env.RAW_OUTPUT_DIR }}/endpoints/${ENDP_ID}.json"
             else
-                echo "Warning: Could not fetch valid details for endpoint '$ENDP_ID'. Response: "$ENDP_DETAILS""
+                # Changed to GitHub Actions warning command
+                echo "::warning::Could not fetch valid details for endpoint '$ENDP_ID'. Response: "$ENDP_DETAILS""
             fi
           done
 
@@ -257,7 +260,8 @@ jobs:
               fi
             done
           else
-            echo "Warning: Directory '$RAW_DIR/securitySystems' does not exist."
+            # Changed to GitHub Actions warning command
+            echo "::warning::Directory '$RAW_DIR/securitySystems' does not exist."
           fi
 
           echo "Processing Connections..."
@@ -268,7 +272,8 @@ jobs:
               fi
             done
           else
-            echo "Warning: Directory '$RAW_DIR/connections' does not exist."
+            # Changed to GitHub Actions warning command
+            echo "::warning::Directory '$RAW_DIR/connections' does not exist."
           fi
 
           echo "Processing Endpoints..."
@@ -279,7 +284,8 @@ jobs:
               fi
             done
           else
-            echo "Warning: Directory '$RAW_DIR/endpoints' does not exist."
+            # Changed to GitHub Actions warning command
+            echo "::warning::Directory '$RAW_DIR/endpoints' does not exist."
           fi
 
       - name: Upload Processed Configurations as Artifact
@@ -376,7 +382,6 @@ jobs:
             local curl_options=(
               # Conditionally add -v or -s based on loglevel
               # -v for DEBUG, -s for INFO
-              # Use conditional logic here to add the correct option
             )
 
             if [[ "${{ github.event.inputs.loglevel }}" == "DEBUG" ]]; then
@@ -434,7 +439,8 @@ jobs:
                 if echo "$HTTP_BODY" | jq -e '.msg == "success"' >/dev/null; then
                     echo "    Successfully deployed $type: $id."
                 else
-                    echo "Warning: Deployment for $type: $id succeeded with HTTP $HTTP_STATUS, but JSON response indicates potential issue. Response: $HTTP_BODY"
+                    # Changed to GitHub Actions warning command
+                    echo "::warning::Deployment for $type: $id succeeded with HTTP $HTTP_STATUS, but JSON response indicates potential issue. Response: $HTTP_BODY"
                 fi
             else
                 echo "Error: Failed to deploy $type: $id. HTTP Status: $HTTP_STATUS. Response: $HTTP_BODY"
@@ -451,7 +457,7 @@ jobs:
               fi
             done
           else
-            echo "Warning: Processed directory '$PROCESSED_DIR/connections' does not exist."
+            echo "::warning::Processed directory '$PROCESSED_DIR/connections' does not exist."
           fi
           
           echo "Pushing Security Systems to Test Environment..."
@@ -462,7 +468,7 @@ jobs:
               fi
             done
           else
-            echo "Warning: Processed directory '$PROCESSED_DIR/securitySystems' does not exist."
+            echo "::warning::Processed directory '$PROCESSED_DIR/securitySystems' does not exist."
           fi
 
           echo "Pushing Endpoints to Test Environment..."
@@ -473,5 +479,5 @@ jobs:
               fi
             done
           else
-            echo "Warning: Processed directory '$PROCESSED_DIR/endpoints' does not exist."
+            echo "::warning::Processed directory '$PROCESSED_DIR/endpoints' does not exist."
           fi
