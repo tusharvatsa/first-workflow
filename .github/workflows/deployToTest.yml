@@ -410,9 +410,10 @@ jobs:
             echo "Curl options finalized"
             # Execute curl command using the constructed array
             DEPLOY_RESPONSE_FULL=$(curl "${curl_options[@]}")
-              
+            echo "Call completed"
             # Extract the HTTP status code (last 3 characters)
             HTTP_STATUS=$(echo "$DEPLOY_RESPONSE_FULL" | tail -c 4)
+            echo "HTTP_STATUS=$HTTP_STATUS"
             # Better way to split: Everything but the last 4 characters
             HTTP_BODY=$(echo "$DEPLOY_RESPONSE_FULL" | head -c -4)
 
