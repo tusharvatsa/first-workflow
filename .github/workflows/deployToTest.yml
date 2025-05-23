@@ -1,4 +1,4 @@
-name: Deploy Dev to Test - Fetch & Process Configs
+name: Deploy Dev to Test
 
 on:
   # push: # Removed push trigger as requested
