@@ -363,7 +363,7 @@ jobs:
             echo "DEBUG: Config JSON Payload (first 200 chars): ${config_json_payload:0:200}..."
             
             local curl_options=(
-              -v # Keep -v for now for verbose output, remove later if desired
+              -s                            # Keep -v for now for verbose output, remove later if desired
               -X POST
               -w "%{http_code}"
               "$final_api_endpoint"
