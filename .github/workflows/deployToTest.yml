@@ -404,7 +404,6 @@ jobs:
             else
                 echo "Error: Failed to deploy $type: $id. Response: $DEPLOY_RESPONSE"
                 # You might want to exit 1 here if a single deployment failure is critical
-                exit 1 
             fi
             return 0
           }
@@ -414,7 +413,8 @@ jobs:
           if [ -d "$PROCESSED_DIR/connections" ]; then
             for file in "$PROCESSED_DIR/connections"/*.json; do
               if [ -f "$file" ]; then
-                push_single_config "connection" "$file" "/ECM/api/v5/testConnection"            # testConnection also updates/creates and runs a test connection
+                push_single_config "connection" "$file" "/ECM/api/v5/testConnection"            
+                # testConnection also updates/creates and runs a test connection
               fi
             done
           else

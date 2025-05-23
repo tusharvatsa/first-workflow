@@ -10,14 +10,16 @@
                 "createdby",
                 "errorcode",
                 "status",
-                "connectionname"
+                "connectionname",
+				"connectionType"
             ],
             "override": {
                 "connectionName": "zolo-ad-prod",
                 "description": "zolo-ad-prod",
                 "URL": "ldaps://zolo-ad-prod-url",
                 "USERNAME": "zolo-ad-prod-username",
-                "PASSWORD": "zolo-ad-prod-password"
+                "PASSWORD": "zolo-ad-prod-password",
+				"connectionType" : "AD"
             }
         },
         "zolo-ad-hrmaster": {
@@ -30,14 +32,16 @@
                 "createdby",
                 "errorcode",
                 "status",
-                "connectionname"
+                "connectionname",
+				"connectionType"
             ],
             "override": {
                 "connectionName": "zolo-ad-hrmaster-prod",
                 "description": "zolo-ad-hrmaster-prod",
                 "URL": "ldaps://zolo-ad-hrmaster-prod-url",
                 "USERNAME": "zolo-ad-hrmaster-prod-username",
-                "PASSWORD": "zolo-ad-hrmaster-prod-password"
+                "PASSWORD": "zolo-ad-hrmaster-prod-password",
+				"connectionType": "AD"
             }
         }
     },
