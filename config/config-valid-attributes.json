@@ -11,7 +11,8 @@
                 "errorcode",
                 "status",
                 "connectionname",
-				"connectionType"
+				"connectionType",
+				"connectiontype"
             ],
             "override": {
                 "connectionName": "zolo-ad-prod",
@@ -33,7 +34,8 @@
                 "errorcode",
                 "status",
                 "connectionname",
-				"connectionType"
+				"connectionType",
+				"connectiontype"
             ],
             "override": {
                 "connectionName": "zolo-ad-hrmaster-prod",
