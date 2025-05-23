@@ -1,9 +1,9 @@
 name: Deploy Dev to Test - Fetch & Process Configs
 
 on:
-  push:
-    branches:
-      - main # Trigger when changes are pushed to the 'main' branch
+  # push: # Removed push trigger as requested
+  #   branches:
+  #     - main # Trigger when changes are pushed to the 'main' branch
   workflow_dispatch: # Allows manual triggering from the GitHub UI
     inputs:
       environment:
@@ -15,7 +15,7 @@ on:
           - test
 
 env:
-  API_BASE_URL: 'https://emeaps-poc.saviyntcloud.com' # Your actual API base URL
+  # API_BASE_URL is now managed at the environment level via GitHub Environment variables (vars)
   CONFIG_FILE_PATH: 'config/config-dev-to-test-sync.json' # Path to your configuration list file
   VALID_ATTRIBUTES_CONFIG_PATH: 'config/config-valid-attributes.json' # Path to your valid attributes file
   RAW_OUTPUT_DIR: 'fetched_configs_raw' # Base directory to save all fetched JSON files
@@ -37,11 +37,11 @@ jobs:
         id: get_token
         run: |
           TOKEN_RESPONSE=$(curl -s -X POST \
-            "${{ env.API_BASE_URL }}/ECMv6/api/auth/login" \
+            "${{ vars.DEV_API_BASE_URL }}/ECMv6/api/auth/login" \
             -H "Content-Type: application/json" \
             -d '{
-                  "username": "${{ secrets.API_USERNAME }}",
-                  "password": "${{ secrets.API_PASSWORD }}"
+                  "username": "${{ secrets.DEV_API_USERNAME }}",
+                  "password": "${{ secrets.DEV_API_PASSWORD }}"
                 }')
           
           if [ "$(echo "$TOKEN_RESPONSE" | jq -r '.accessToken')" == "null" ]; then
@@ -54,8 +54,8 @@ jobs:
           echo "AccessToken::$ACCESS_TOKEN" # For logging, not for direct use in subsequent steps
           echo "accessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
         env:
-          API_USERNAME: ${{ secrets.API_USERNAME }}
-          API_PASSWORD: ${{ secrets.API_PASSWORD }}
+          DEV_API_USERNAME: ${{ secrets.DEV_API_USERNAME }}
+          DEV_API_PASSWORD: ${{ secrets.DEV_API_PASSWORD }}
 
       - name: Read Configuration List File
         id: read_config_list
@@ -105,7 +105,7 @@ jobs:
           for SYS_ID in "${SECURITY_SYSTEMS[@]}"; do # Iterate over the bash array
             echo "  Fetching security system: $SYS_ID"
             SYS_DETAILS=$(curl -s -X GET \
-              "${{ env.API_BASE_URL }}/ECM/api/v5/getSecuritySystems?systemname=$SYS_ID" \
+              "${{ vars.DEV_API_BASE_URL }}/ECM/api/v5/getSecuritySystems?systemname=$SYS_ID" \
               -H "$AUTH_HEADER" \
               -H "$CONTENT_TYPE")
             
@@ -127,7 +127,7 @@ jobs:
             POST_DATA="{\"connectionname\": \"$CONN_ID\"}"
             
             CONN_DETAILS=$(curl -s -X POST \
-              "${{ env.API_BASE_URL }}/ECM/api/v5/getConnectionDetails" \
+              "${{ vars.DEV_API_BASE_URL }}/ECM/api/v5/getConnectionDetails" \
               -H "$AUTH_HEADER" \
               -H "$CONTENT_TYPE" \
               -d "$POST_DATA")
@@ -147,7 +147,7 @@ jobs:
             POST_DATA="{ \"filterCriteria1\": { \"endpointname\": \"$ENDP_ID\" } }"
             
             ENDP_DETAILS=$(curl -s -X POST \
-              "${{ env.API_BASE_URL }}/ECM/api/v5/getEndpoints" \
+              "${{ vars.DEV_API_BASE_URL }}/ECM/api/v5/getEndpoints" \
               -H "$AUTH_HEADER" \
               -H "$CONTENT_TYPE" \
               -d "$POST_DATA")
@@ -250,7 +250,7 @@ jobs:
             if [ -n "$exclude_keys" ]; then
               for key in $exclude_keys; do
                 processed_json=$(echo "$processed_json" | jq "del(.$key)")
-              done
+              done 
               echo "    Excluded keys for $type $id: $exclude_keys"
             fi
 
@@ -311,3 +311,136 @@ jobs:
         with:
           name: dev-configurations-processed
           path: ${{ env.PROCESSED_OUTPUT_DIR }}/ # Upload the entire processed directory
+
+  deploy_to_test_environment:
+    runs-on: ubuntu-latest
+    needs: process_configurations # This job depends on the successful processing of configurations
+    environment:
+      name: test_env # Link to your 'test_env' GitHub Environment for secrets/protection
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install JQ (for JSON parsing)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Download Processed Configurations Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dev-configurations-processed
+          path: ${{ env.PROCESSED_OUTPUT_DIR }} # Download to the same path as it was uploaded from
+
+      - name: List Processed Configurations (after download)
+        run: |
+          echo "Contents of ${{ env.PROCESSED_OUTPUT_DIR }} after artifact download:"
+          ls -R ${{ env.PROCESSED_OUTPUT_DIR }} || echo "Directory is empty or does not exist."
+
+      - name: Fetch Access Token for Test Environment
+        id: get_test_token
+        run: |
+          TOKEN_RESPONSE=$(curl -s -X POST \
+            "${{ vars.TEST_API_BASE_URL }}/ECMv6/api/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{
+                  "username": "${{ secrets.TEST_API_USERNAME }}",
+                  "password": "${{ secrets.TEST_API_PASSWORD }}"
+                }')
+          
+          if [ "$(echo "$TOKEN_RESPONSE" | jq -r '.accessToken')" == "null" ]; then
+            echo "Error: Failed to fetch access token for test environment."
+            echo "$TOKEN_RESPONSE"
+            exit 1
+          fi
+
+          ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.accessToken')
+          echo "AccessToken::$ACCESS_TOKEN"
+          echo "accessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+        env:
+          TEST_API_USERNAME: ${{ secrets.TEST_API_USERNAME }}
+          TEST_API_PASSWORD: ${{ secrets.TEST_API_PASSWORD }}
+
+      - name: Push Configurations to Test Environment
+        run: |
+          ACCESS_TOKEN="${{ steps.get_test_token.outputs.accessToken }}"
+          AUTH_HEADER="Authorization: Bearer $ACCESS_TOKEN"
+          CONTENT_TYPE="Content-Type: application/json"
+          PROCESSED_DIR="${{ env.PROCESSED_OUTPUT_DIR }}"
+
+          # Function to push a single configuration file, this is defined here and used afterwards
+          push_single_config() {
+            local type=$1 # e.g., "securitySystem", "connection", "endpoint"
+            local file_path=$2 # Full path to the processed file
+            local api_endpoint=$3 # API endpoint for this type (e.g., /ECM/api/v5/createSecuritySystem)
+            local id=$(basename "$file_path" .json)
+
+            echo "  Pushing $type: $id to $api_endpoint (File: $file_path)"
+            
+            if [ ! -f "$file_path" ]; then
+                echo "Error: Processed file not found at '$file_path'. Skipping deployment for $id."
+                return 1 # Indicate failure for this specific file
+            fi
+
+            local config_json_payload=$(cat "$file_path")
+
+            # Determine the correct API for update vs create
+            # This is a placeholder logic. You'll need to adapt it based on your actual API behavior.
+            # For example, you might need to first GET to check existence, or use a specific UPDATE endpoint.
+            local final_api_endpoint="${{ vars.TEST_API_BASE_URL }}$api_endpoint" # Referencing vars.TEST_API_BASE_URL
+            
+            # Example: If your API supports PUT for update and POST for create
+            # You might need to check if the entity exists first, or if your API
+            # handles upserts via POST. For simplicity, we'll stick to POST for now,
+            # assuming your API either creates or updates via POST.
+
+            DEPLOY_RESPONSE=$(curl -s -X POST \
+              "$final_api_endpoint" \
+              -H "$AUTH_HEADER" \
+              -H "$CONTENT_TYPE" \
+              -d "$config_json_payload")
+            
+            # Check for API response success (adjust based on your API's success response)
+            if echo "$DEPLOY_RESPONSE" | jq -e '.msg == "success"' >/dev/null; then # Assuming a 'msg: success' response
+                echo "    Successfully deployed $type: $id. Response: $DEPLOY_RESPONSE"
+            else
+                echo "Error: Failed to deploy $type: $id. Response: $DEPLOY_RESPONSE"
+                # You might want to exit 1 here if a single deployment failure is critical
+                exit 1 
+            fi
+            return 0
+          }
+
+          # Push Connections, connections must be updated before other objects
+          echo "Pushing Connections to Test Environment..."
+          if [ -d "$PROCESSED_DIR/connections" ]; then
+            for file in "$PROCESSED_DIR/connections"/*.json; do
+              if [ -f "$file" ]; then
+                push_single_config "connection" "$file" "/ECM/api/v5/testConnection"            # testConnection also updates/creates and runs a test connection
+              fi
+            done
+          else
+            echo "Warning: Processed directory '$PROCESSED_DIR/connections' does not exist."
+          fi
+          
+          # Push Security Systems
+          #echo "Pushing Security Systems to Test Environment..."
+          #if [ -d "$PROCESSED_DIR/securitySystems" ]; then
+          #  for file in "$PROCESSED_DIR/securitySystems"/*.json; do
+          #    if [ -f "$file" ]; then
+          #      push_single_config "securitySystem" "$file" "/ECM/api/v5/createSecuritySystem" # Adjust API endpoint as needed
+          #    fi
+          #  done
+          #else
+          #  echo "Warning: Processed directory '$PROCESSED_DIR/securitySystems' does not exist."
+          #fi
+
+          # Push Endpoints
+          #echo "Pushing Endpoints to Test Environment..."
+          #if [ -d "$PROCESSED_DIR/endpoints" ]; then
+          #  for file in "$PROCESSED_DIR/endpoints"/*.json; do
+          #    if [ -f "$file" ]; then
+          #      push_single_config "endpoint" "$file" "/ECM/api/v5/createEndpoint" # Adjust API endpoint as needed
+          #    fi
+          #  done
+          #else
+          #  echo "Warning: Processed directory '$PROCESSED_DIR/endpoints' does not exist."
+          #fi
