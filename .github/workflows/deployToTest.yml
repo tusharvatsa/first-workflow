@@ -396,7 +396,7 @@ jobs:
             # assuming your API either creates or updates via POST.
 
             DEPLOY_RESPONSE_FULL=$(curl -s -X POST \
-              -w "%{http_code}"
+              -w "%{http_code}" \
               "$final_api_endpoint" \
               -H "$AUTH_HEADER" \
               -H "$CONTENT_TYPE" \
