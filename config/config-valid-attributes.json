@@ -52,34 +52,37 @@
     "securitySystem": {
         "zolo-ad": {
             "exclude": [
-                "updatedby",
-                "connectionkey",
-                "createdon",
-                "createdby",
-                "errorcode",
-                "status"
+				"msg",
+				"displayCount",
+				"errorCode",
+				"totalCount",
+				"updateDate",
+				"createDate",
+				"updatedBy",
+				"createdFrom",
+				"createdBy"
             ],
             "override": {
-                "connectionname": "",
-                "username": "",
-                "PASSWORD": ""
+				"systemname" : "zolo-ad-prod",
+				"displayName": "zolo-ad-prod",
+                "connection": "zolo-ad-prod"
             }
         }
     },
     "endpoint": {
         "zolo-ad": {
             "exclude": [
-                "updatedby",
-                "connectionkey",
-                "createdon",
-                "createdby",
-                "errorcode",
-                "status"
+				"updateDate",
+				"id",
+				"createDate",
+                "updatedBy",
+				"createdFrom",
+				"createdBy"
             ],
             "override": {
-                "connectionname": "",
-                "username": "",
-                "PASSWORD": ""
+                "displayName": "zolo-ad-prod",
+                "securitySystem": "zolo-ad-prod",
+				"endpointname": "zolo-ad-prod"
             }
         }
     }

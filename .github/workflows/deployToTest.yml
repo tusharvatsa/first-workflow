@@ -232,6 +232,16 @@ jobs:
                 echo "    Flattening 'connectionattributes' for connection: $id"
                 processed_json=$(echo "$processed_json" | jq '. + .connectionattributes | del(.connectionattributes)')
             fi
+            
+            if [ "$type" == "securitysystem" ]; then
+                echo "    Flattening 'securitySystemDetails' for connection: $id"
+                processed_json=$(echo "$processed_json" | jq '. + .securitySystemDetails | del(.securitySystemDetails)')
+            fi
+            
+            if [ "$type" == "endpoint" ]; then
+                echo "    Flattening 'endpoints' for endpoint: $id"
+                processed_json=$(echo "$processed_json" | jq '. + .endpoints | del(.endpoints)')
+            fi
 
             local exclude_keys=$(echo "$config_json" | jq -r ".${type}[\"$id\"].exclude[]? // empty")
             if [ -n "$exclude_keys" ]; then
@@ -464,7 +474,7 @@ jobs:
           if [ -d "$PROCESSED_DIR/securitySystems" ]; then
             for file in "$PROCESSED_DIR/securitySystems"/*.json; do
               if [ -f "$file" ]; then
-                push_single_config "securitySystem" "$file" "/ECM/api/v5/createSecuritySystem"
+                push_single_config "securitySystem" "$file" "/getSecuritySystems?systemname=zolo-ad&max=1"
               fi
             done
           else
