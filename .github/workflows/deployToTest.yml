@@ -241,7 +241,7 @@ jobs:
             
             if [ "$type" == "endpoint" ]; then
                 echo "    Flattening 'endpoints' for endpoint: $id"
-                processed_json=$(echo "$processed_json" | jq '. + .endpoints | del(.endpoints)')
+                processed_json=$(echo "$processed_json" | jq '. + .endpoints[0] | del(.endpoints)')
             fi
 
             local exclude_keys=$(echo "$config_json" | jq -r ".${type}[\"$id\"].exclude[]? // empty")
