@@ -139,7 +139,8 @@ jobs:
           echo "Fetching and saving Dev Endpoints..."
           for ENDP_ID in "${ENDPOINTS[@]}"; do
             echo "  Fetching endpoint: $ENDP_ID"
-            POST_DATA="{ \"filterCriteria1\": { \"endpointname\": \"$ENDP_ID\" } }"
+            POST_DATA="{ \"filterCriteria\": { \"endpointname\": \"$ENDP_ID\" } }"
+            #echo "$POST_DATA"
             
             ENDP_DETAILS=$(curl -s -X POST \
               "${{ vars.DEV_API_BASE_URL }}/ECM/api/v5/getEndpoints" \
