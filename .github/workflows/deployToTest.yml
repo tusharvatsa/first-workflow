@@ -475,7 +475,7 @@ jobs:
           if [ -d "$PROCESSED_DIR/securitySystems" ]; then
             for file in "$PROCESSED_DIR/securitySystems"/*.json; do
               if [ -f "$file" ]; then
-                push_single_config "securitySystem" "$file" "/getSecuritySystems?systemname=zolo-ad&max=1"
+                push_single_config "securitySystem" "$file" "/ECM/api/v5/createSecuritySystem"
               fi
             done
           else
