@@ -60,7 +60,8 @@
 				"createDate",
 				"updatedBy",
 				"createdFrom",
-				"createdBy"
+				"createdBy",
+				"securitySystem"
             ],
             "override": {
 				"systemname" : "zolo-ad-prod",
@@ -77,11 +78,12 @@
 				"createDate",
                 "updatedBy",
 				"createdFrom",
-				"createdBy"
+				"createdBy",
+				"securitySystem"
             ],
             "override": {
                 "displayName": "zolo-ad-prod",
-                "securitySystem": "zolo-ad-prod",
+                "securitysystem": "zolo-ad-prod",
 				"endpointname": "zolo-ad-prod"
             }
         }

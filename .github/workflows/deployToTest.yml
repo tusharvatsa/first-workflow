@@ -236,7 +236,7 @@ jobs:
             
             if [ "$type" == "securitysystem" ]; then
                 echo "    Flattening 'securitySystemDetails' for connection: $id"
-                processed_json=$(echo "$processed_json" | jq '. + .securitySystemDetails | del(.securitySystemDetails)')
+                processed_json=$(echo "$processed_json" | jq '. + .securitySystemDetails[0] | del(.securitySystemDetails)')
             fi
             
             if [ "$type" == "endpoint" ]; then
