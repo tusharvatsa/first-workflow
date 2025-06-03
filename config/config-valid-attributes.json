@@ -73,6 +73,10 @@
     "endpoint": {
         "zolo-ad": {
             "exclude": [
+				"displayCount",
+				"errorCode",
+				"totalCount",
+				"message",
 				"updateDate",
 				"id",
 				"createDate",
@@ -82,9 +86,9 @@
 				"securitySystem"
             ],
             "override": {
-                "displayName": "zolo-ad-prod",
-                "securitysystem": "zolo-ad-prod",
-				"endpointname": "zolo-ad-prod"
+                "endpointname": "zolo-ad-prod",
+				"displayName": "zolo-ad-prod",
+                "securitysystem": "zolo-ad-prod"
             }
         }
     }
