@@ -140,7 +140,6 @@ jobs:
           for ENDP_ID in "${ENDPOINTS[@]}"; do
             echo "  Fetching endpoint: $ENDP_ID"
             POST_DATA="{ \"filterCriteria\": { \"endpointname\": \"$ENDP_ID\" } }"
-            #echo "$POST_DATA"
             
             ENDP_DETAILS=$(curl -s -X POST \
               "${{ vars.DEV_API_BASE_URL }}/ECM/api/v5/getEndpoints" \
@@ -234,8 +233,8 @@ jobs:
                 processed_json=$(echo "$processed_json" | jq '. + .connectionattributes | del(.connectionattributes)')
             fi
             
-            if [ "$type" == "securitysystem" ]; then
-                echo "    Flattening 'securitySystemDetails' for connection: $id"
+            if [ "$type" == "securitySystem" ]; then
+                echo "    Flattening 'securitySystemDetails' for security system: $id"
                 processed_json=$(echo "$processed_json" | jq '. + .securitySystemDetails[0] | del(.securitySystemDetails)')
             fi
             
@@ -248,7 +247,7 @@ jobs:
             if [ -n "$exclude_keys" ]; then
               for key in $exclude_keys; do
                 processed_json=$(echo "$processed_json" | jq "del(.$key)")
-              done
+              done # Fixed: Added closing brace for 'for' loop
               echo "    Excluded keys for $type $id: $exclude_keys"
             fi
 
@@ -365,14 +364,18 @@ jobs:
           REQUIRED_RESPONSE_HEADER_STRING="response: standard" 
           
           PROCESSED_DIR="${{ env.PROCESSED_OUTPUT_DIR }}"
+          TEST_API_BASE_URL="${{ vars.TEST_API_BASE_URL }}" # Define this for easier use in functions
 
+          # Function to push a single configuration
+          # Arguments: type, file_path, api_endpoint, http_method (POST/PUT)
           push_single_config() {
             local type=$1
             local file_path=$2
             local api_endpoint=$3
+            local http_method=$4 # New argument for HTTP method
             local id=$(basename "$file_path" .json)
 
-            echo "  Pushing $type: $id to $api_endpoint (File: $file_path)"
+            echo "  Pushing $type: $id to $api_endpoint using $http_method (File: $file_path)"
             
             if [ ! -f "$file_path" ]; then
                 echo "Error: Processed file not found at '$file_path'. Skipping deployment for $id."
@@ -380,7 +383,7 @@ jobs:
             fi
 
             local config_json_payload=$(cat "$file_path")
-            local final_api_endpoint="${{ vars.TEST_API_BASE_URL }}$api_endpoint"
+            local final_api_endpoint="${TEST_API_BASE_URL}$api_endpoint"
 
             # Conditional DEBUG logging
             if [[ "${{ github.event.inputs.loglevel }}" == "DEBUG" ]]; then
@@ -392,7 +395,6 @@ jobs:
             
             local curl_options=(
               # Conditionally add -v or -s based on loglevel
-              # -v for DEBUG, -s for INFO
             )
 
             if [[ "${{ github.event.inputs.loglevel }}" == "DEBUG" ]]; then
@@ -401,7 +403,7 @@ jobs:
                 curl_options+=("-s") # Silent output for INFO
             fi
 
-            curl_options+=("-X" "POST")
+            curl_options+=("-X" "$http_method") # Use the provided HTTP method
             curl_options+=("-w" "%{http_code}")
             curl_options+=("$final_api_endpoint")
             curl_options+=("-H" "$AUTH_HEADER")
@@ -464,7 +466,7 @@ jobs:
           if [ -d "$PROCESSED_DIR/connections" ]; then
             for file in "$PROCESSED_DIR/connections"/*.json; do
               if [ -f "$file" ]; then
-                push_single_config "connection" "$file" "/ECM/api/v5/testConnection"
+                push_single_config "connection" "$file" "/ECM/api/v5/testConnection" "POST"
               fi
             done
           else
@@ -475,7 +477,24 @@ jobs:
           if [ -d "$PROCESSED_DIR/securitySystems" ]; then
             for file in "$PROCESSED_DIR/securitySystems"/*.json; do
               if [ -f "$file" ]; then
-                push_single_config "securitySystem" "$file" "/ECM/api/v5/createSecuritySystem"
+                # Read the systemname from the processed JSON file content
+                SYS_ID=$(jq -r '.systemname' "$file")
+                echo "  Checking existence of security system: $SYS_ID in Test environment..."
+                
+                # Fetch security system details from Test environment
+                TEST_SYS_DETAILS=$(curl -s -X GET \
+                  "${TEST_API_BASE_URL}/ECM/api/v5/getSecuritySystems?systemname=$SYS_ID" \
+                  -H "$AUTH_HEADER" \
+                  -H "$CONTENT_TYPE")
+                
+                # Determine if the security system exists and set the appropriate API endpoint and method
+                if echo "$TEST_SYS_DETAILS" | jq -e '.[0].systemname == "'"$SYS_ID"'"' >/dev/null; then
+                  echo "  Security system '$SYS_ID' found in Test environment. Preparing for update."
+                  push_single_config "securitySystem" "$file" "/ECM/api/v5/updateSecuritySystem" "PUT"
+                else
+                  echo "  Security system '$SYS_ID' not found in Test environment. Preparing for creation."
+                  push_single_config "securitySystem" "$file" "/ECM/api/v5/createSecuritySystem" "POST"
+                fi
               fi
             done
           else
@@ -486,7 +505,27 @@ jobs:
           if [ -d "$PROCESSED_DIR/endpoints" ]; then
             for file in "$PROCESSED_DIR/endpoints"/*.json; do
               if [ -f "$file" ]; then
-                push_single_config "endpoint" "$file" "/ECM/api/v5/createEndpoint"
+                # Read the endpointname from the processed JSON file content
+                ENDP_ID=$(jq -r '.endpointname' "$file")
+                echo "  Checking existence of endpoint: $ENDP_ID in Test environment..."
+                
+                # Fetch endpoint details from Test environment
+                # Note: getEndpoints uses POST with filterCriteria
+                POST_DATA="{ \"filterCriteria\": { \"endpointname\": \"$ENDP_ID\" } }"
+                TEST_ENDP_DETAILS=$(curl -s -X POST \
+                  "${TEST_API_BASE_URL}/ECM/api/v5/getEndpoints" \
+                  -H "$AUTH_HEADER" \
+                  -H "$CONTENT_TYPE" \
+                  -d "$POST_DATA")
+                
+                # Determine if the endpoint exists and set the appropriate API endpoint and method
+                if echo "$TEST_ENDP_DETAILS" | jq -e '.[0].endpointname == "'"$ENDP_ID"'"' >/dev/null; then
+                  echo "  Endpoint '$ENDP_ID' found in Test environment. Preparing for update."
+                  push_single_config "endpoint" "$file" "/ECM/api/v5/updateEndpoint" "PUT"
+                else
+                  echo "  Endpoint '$ENDP_ID' not found in Test environment. Preparing for creation."
+                  push_single_config "endpoint" "$file" "/ECM/api/v5/createEndpoint" "POST"
+                fi
               fi
             done
           else
