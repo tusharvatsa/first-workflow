@@ -83,7 +83,8 @@
                 "updatedBy",
 				"createdFrom",
 				"createdBy",
-				"securitySystem"
+				"securitySystem",
+				"connectionconfig"
             ],
             "override": {
                 "endpointname": "zolo-ad-prod",
