@@ -236,17 +236,17 @@ jobs:
             if [ "$type" == "securitySystem" ]; then
                 echo "    Flattening 'securitySystemDetails' for security system: $id"
                 processed_json=$(echo "$processed_json" | jq '. + .securitySystemDetails[0] | del(.securitySystemDetails)')
-                
-                # Safely parse taskemailtemplates from string to array if it exists and is a string
-                processed_json=$(echo "$processed_json" | jq '
-                  .taskemailtemplates |= if type == "string" then fromjson else . end
-                ')
-                echo "    Finished parsing 'taskemailtemplates' for security system: $id"
             fi
             
             if [ "$type" == "endpoint" ]; then
                 echo "    Flattening 'endpoints' for endpoint: $id"
                 processed_json=$(echo "$processed_json" | jq '. + .endpoints[0] | del(.endpoints)')
+                
+                # Safely parse taskemailtemplates from string to array if it exists and is a string
+                processed_json=$(echo "$processed_json" | jq '
+                  .taskemailtemplates |= if type == "string" then fromjson else . end
+                ')
+                echo "    Finished parsing 'taskemailtemplates' for endpoint: $id"
             fi
 
             local exclude_keys=$(echo "$config_json" | jq -r ".${type}[\"$id\"].exclude[]? // empty")
