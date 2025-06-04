@@ -86,8 +86,7 @@
 				"createdFrom",
 				"createdBy",
 				"securitySystem",
-				"connectionconfig",
-				"taskemailtemplates"
+				"connectionconfig"
             ],
             "override": {
                 "endpointname": "zolo-ad-prod",
