@@ -236,6 +236,12 @@ jobs:
             if [ "$type" == "securitySystem" ]; then
                 echo "    Flattening 'securitySystemDetails' for security system: $id"
                 processed_json=$(echo "$processed_json" | jq '. + .securitySystemDetails[0] | del(.securitySystemDetails)')
+                
+                # Parse taskemailtemplates if it's a string
+                if echo "$processed_json" | jq -e '.taskemailtemplates | type == "string"' >/dev/null; then
+                  echo "    Parsing 'taskemailtemplates' string to array for security system: $id"
+                  processed_json=$(echo "$processed_json" | jq '(.taskemailtemplates |= fromjson)')
+                fi
             fi
             
             if [ "$type" == "endpoint" ]; then
@@ -247,7 +253,7 @@ jobs:
             if [ -n "$exclude_keys" ]; then
               for key in $exclude_keys; do
                 processed_json=$(echo "$processed_json" | jq "del(.$key)")
-              done # Fixed: Added closing brace for 'for' loop
+              done
               echo "    Excluded keys for $type $id: $exclude_keys"
             fi
 
@@ -488,7 +494,7 @@ jobs:
                   -H "$CONTENT_TYPE")
                 
                 # Determine if the security system exists and set the appropriate API endpoint and method
-                if echo "$TEST_SYS_DETAILS" | jq -e '.securitySystemDetails[0].systemname == "'"$SYS_ID"'"' >/dev/null; then
+                if echo "$TEST_SYS_DETAILS" | jq -e '.[0].systemname == "'"$SYS_ID"'"' >/dev/null; then
                   echo "  Security system '$SYS_ID' found in Test environment. Preparing for update."
                   push_single_config "securitySystem" "$file" "/ECM/api/v5/updateSecuritySystem" "PUT"
                 else
@@ -511,7 +517,7 @@ jobs:
                 echo "  Checking existence of endpoint: $ENDP_ID in Test environment..."
                 
                 # Fetch endpoint details from Test environment
-                # Note: getEndpoints uses POST with filterCriteria, check SS for endpoint
+                # Note: getEndpoints uses POST with filterCriteria
                 POST_DATA="{ \"filterCriteria\": { \"endpointname\": \"$ENDP_ID\", \"securitysystem\" : \"$SS_ID\" } }"
                 TEST_ENDP_DETAILS=$(curl -s -X POST \
                   "${TEST_API_BASE_URL}/ECM/api/v5/getEndpoints" \
@@ -520,7 +526,7 @@ jobs:
                   -d "$POST_DATA")
                 
                 # Determine if the endpoint exists and set the appropriate API endpoint and method
-                if echo "$TEST_ENDP_DETAILS" | jq -e '.endpoints[0].endpointname == "'"$ENDP_ID"'"' >/dev/null; then
+                if echo "$TEST_ENDP_DETAILS" | jq -e '.[0].endpointname == "'"$ENDP_ID"'"' >/dev/null; then
                   echo "  Endpoint '$ENDP_ID' found in Test environment. Preparing for update."
                   push_single_config "endpoint" "$file" "/ECM/api/v5/updateEndpoint" "PUT"
                 else
