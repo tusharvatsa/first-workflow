@@ -237,15 +237,9 @@ jobs:
                 echo "    Flattening 'securitySystemDetails' for security system: $id"
                 processed_json=$(echo "$processed_json" | jq '. + .securitySystemDetails[0] | del(.securitySystemDetails)')
                 
-                # Parse taskemailtemplates if it's a string and exists
-                processed_json=$(echo "$processed_json" | jq '
-                  . as $doc
-                  | if $doc | has("taskemailtemplates") and ($doc.taskemailtemplates | type == "string") then
-                      $doc | .taskemailtemplates |= fromjson
-                    else
-                      $doc
-                    end
-                ')
+                # Directly parse taskemailtemplates from string to array
+                # Assuming 'taskemailtemplates' is always a string containing a JSON array
+                processed_json=$(echo "$processed_json" | jq '(.taskemailtemplates |= fromjson)')
                 echo "    Finished parsing 'taskemailtemplates' for security system: $id"
             fi
             
@@ -303,7 +297,7 @@ jobs:
               if [ -f "$file" ]; then
                 process_single_file "endpoint" "$file"
               fi
-            done # Fixed: Changed '}' to 'done'
+            done
           else
             # Changed to GitHub Actions warning command
             echo "::warning::Directory '$RAW_DIR/endpoints' does not exist."
