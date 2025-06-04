@@ -68,7 +68,7 @@
 				"systemname" : "zolo-ad-prod",
 				"displayName": "zolo-ad-prod",
                 "connection": "zolo-ad-prod",
-				"provisioningConnection" : "zolo-ad-prod",
+				"provisioningConnection" : "zolo-ad-prod"
             }
         }
     },
