@@ -6,6 +6,7 @@
     "zolo-ad"
   ],
   "endpoints_to_sync": [
-    "zolo-ad"
+    "zolo-ad",
+	"Application-Group2"
   ]
 }
