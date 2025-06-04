@@ -61,12 +61,14 @@
 				"updatedBy",
 				"createdFrom",
 				"createdBy",
-				"securitySystem"
+				"securitySystem",
+				"endpoints"
             ],
             "override": {
 				"systemname" : "zolo-ad-prod",
 				"displayName": "zolo-ad-prod",
-                "connection": "zolo-ad-prod"
+                "connection": "zolo-ad-prod",
+				"provisioningConnection" : "zolo-ad-prod",
             }
         }
     },
@@ -84,7 +86,8 @@
 				"createdFrom",
 				"createdBy",
 				"securitySystem",
-				"connectionconfig"
+				"connectionconfig",
+				"taskemailtemplates"
             ],
             "override": {
                 "endpointname": "zolo-ad-prod",
