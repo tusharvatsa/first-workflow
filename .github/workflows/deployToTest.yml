@@ -237,9 +237,10 @@ jobs:
                 echo "    Flattening 'securitySystemDetails' for security system: $id"
                 processed_json=$(echo "$processed_json" | jq '. + .securitySystemDetails[0] | del(.securitySystemDetails)')
                 
-                # Directly parse taskemailtemplates from string to array
-                # Assuming 'taskemailtemplates' is always a string containing a JSON array
-                processed_json=$(echo "$processed_json" | jq '(.taskemailtemplates |= fromjson)')
+                # Safely parse taskemailtemplates from string to array if it exists and is a string
+                processed_json=$(echo "$processed_json" | jq '
+                  .taskemailtemplates |= if type == "string" then fromjson else . end
+                ')
                 echo "    Finished parsing 'taskemailtemplates' for security system: $id"
             fi
             
