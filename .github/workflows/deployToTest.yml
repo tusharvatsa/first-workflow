@@ -499,7 +499,7 @@ jobs:
                   -H "$CONTENT_TYPE")
                 
                 # Determine if the security system exists and set the appropriate API endpoint and method
-                if echo "$TEST_SYS_DETAILS" | jq -e '.[0].systemname == "'"$SYS_ID"'"' >/dev/null; then
+                if echo "$TEST_SYS_DETAILS" | jq -e '.securitySystemDetails[0].systemname == "'"$SYS_ID"'"' >/dev/null; then
                   echo "  Security system '$SYS_ID' found in Test environment. Preparing for update."
                   push_single_config "securitySystem" "$file" "/ECM/api/v5/updateSecuritySystem" "PUT"
                 else
@@ -531,7 +531,7 @@ jobs:
                   -d "$POST_DATA")
                 
                 # Determine if the endpoint exists and set the appropriate API endpoint and method
-                if echo "$TEST_ENDP_DETAILS" | jq -e '.[0].endpointname == "'"$ENDP_ID"'"' >/dev/null; then
+                if echo "$TEST_ENDP_DETAILS" | jq -e '.endpoints[0].endpointname == "'"$ENDP_ID"'"' >/dev/null; then
                   echo "  Endpoint '$ENDP_ID' found in Test environment. Preparing for update."
                   push_single_config "endpoint" "$file" "/ECM/api/v5/updateEndpoint" "PUT"
                 else
