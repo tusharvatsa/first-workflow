@@ -303,7 +303,7 @@ jobs:
               if [ -f "$file" ]; then
                 process_single_file "endpoint" "$file"
               fi
-            } # Fixed: Missing 'done' for 'for' loop
+            done # Fixed: Changed '}' to 'done'
           else
             # Changed to GitHub Actions warning command
             echo "::warning::Directory '$RAW_DIR/endpoints' does not exist."
