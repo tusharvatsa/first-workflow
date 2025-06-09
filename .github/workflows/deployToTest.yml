@@ -243,9 +243,7 @@ jobs:
                 processed_json=$(echo "$processed_json" | jq '. + .endpoints[0] | del(.endpoints)')
                 
                 # Safely parse taskemailtemplates from string to array if it exists and is a string
-                processed_json=$(echo "$processed_json" | jq '
-                  .taskemailtemplates |= if type == "string" then fromjson else . end
-                ')
+                processed_json=$(echo "$processed_json" | jq 'if has("taskemailtemplates") then .taskemailtemplates |= if type == "string" then fromjson else . end else . end')
                 echo "    Finished parsing 'taskemailtemplates' for endpoint: $id"
             fi
 
