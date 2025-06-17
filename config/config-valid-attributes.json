@@ -16,11 +16,11 @@
                 "isTimeoutConfigValidated"
             ],
             "override": {
-                "connectionName": "zolo-ad-prod",
-                "description": "zolo-ad-prod",
-                "URL": "ldaps://zolo-ad-prod-url",
-                "USERNAME": "zolo-ad-prod-username",
-                "PASSWORD": "zolo-ad-prod-password",
+                "connectionName": "zolo-ad-prod1",
+                "description": "zolo-ad-prod1",
+                "URL": "ldaps://zolo-ad-prod1-url",
+                "USERNAME": "zolo-ad-prod1-username",
+                "PASSWORD": "zolo-ad-prod1-password",
                 "connectiontype": "AD"
             }
         },
@@ -65,10 +65,10 @@
                 "endpoints"
             ],
             "override": {
-                "systemname": "zolo-ad-prod",
-                "displayName": "zolo-ad-prod",
-                "connection": "zolo-ad-prod",
-                "provisioningConnection": "zolo-ad-prod"
+                "systemname": "zolo-ad-prod1",
+                "displayName": "zolo-ad-prod1",
+                "connection": "zolo-ad-prod1",
+                "provisioningConnection": "zolo-ad-prod1"
             }
         }
     },
@@ -89,9 +89,9 @@
                 "connectionconfig"
             ],
             "override": {
-                "endpointname": "zolo-ad-prod",
-                "displayName": "zolo-ad-prod",
-                "securitysystem": "zolo-ad-prod"
+                "endpointname": "zolo-ad-prod1",
+                "displayName": "zolo-ad-prod1",
+                "securitysystem": "zolo-ad-prod1"
             }
         },
         "Application-Group2": {
@@ -110,9 +110,9 @@
                 "connectionconfig"
             ],
             "override": {
-                "endpointname": "Application-Group2-prod",
-                "displayName": "Application-Group2-prod",
-                "securitysystem": "zolo-ad-prod"
+                "endpointname": "Application-Group2-prod1",
+                "displayName": "Application-Group2-prod1",
+                "securitysystem": "zolo-ad-prod1"
             }
         }
     }
